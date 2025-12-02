@@ -12,22 +12,22 @@ TEC_PASSIVE_THRESHOLD = 128
 INITIAL_TEC = 0
 # ----------------------
 
-# Variabili condivise per il TEC SIMULATO della Vittima
+# Variabili condivise
 victim_tec_sim = INITIAL_TEC
-attack_active = threading.Event() # Flag: L'errore è stato rilevato
+attack_active = threading.Event() 
+# Contatore globale che tiene traccia di quanti messaggi la Vittima HA INVIATO.
+# Il listener userà questo per distinguere i messaggi propri da quelli estranei.
+tx_message_counter = 0 
 
 def update_tec(current_tec):
     """Calcola il nuovo TEC della Vittima in base alla fase dell'attacco."""
-    # La Vittima non sa se l'attaccante è fermo, quindi continua ad aumentare il TEC.
     if current_tec < TEC_PASSIVE_THRESHOLD:
-        # Fase 1: Error Active -> Aumento di +8
         return current_tec + 8, 8, "Active"
     else:
-        # Fase 2: Error Passive -> Aumento di +7 (Netto +8 -1)
         return current_tec + 7, 7, "Passive"
 
-def start_victim_reactive():
-    global victim_tec_sim, attack_active
+def start_victim_corrected():
+    global victim_tec_sim, attack_active, tx_message_counter
     
     try:
         bus = can.interface.Bus(channel=CAN_INTERFACE, bustype='socketcan', receive_own_messages=True)
@@ -36,44 +36,44 @@ def start_victim_reactive():
         print(f"❌ [Vittima] Errore di connessione: {e}")
         return
 
-    message_counter = 0
     start_time = time.time()
     
-    # Listener per rilevare l'inizio dell'attacco (ovvero il conflitto ID)
+    # Avvia il listener
     listener_thread = threading.Thread(target=sniff_for_attack_start, args=(bus,))
     listener_thread.daemon = True
     listener_thread.start()
 
     while True:
         
-        # 1. CHECK AUTO-TERMINAZIONE (Bus Off simulato)
         if victim_tec_sim >= BUS_OFF_THRESHOLD:
             print(f"\n🚨🚨 [Vittima] BUS OFF RILEVATO! (TEC Sim: {victim_tec_sim}). Auto-terminazione.")
             break
         
-        # 2. Ciclo di Trasmissione (solo se è tempo)
         if (time.time() - start_time) >= TRANSMISSION_PERIOD_SEC:
             
-            print(f"\n--- CICLO VITTIMA #{message_counter+1} ({time.strftime('%H:%M:%S')}) ---")
+            # 1. RILEVAZIONE ERRORE E AGGIORNAMENTO TEC
+            print(f"\n--- CICLO VITTIMA #{tx_message_counter+1} ({time.strftime('%H:%M:%S')}) ---")
             
-            # 3. AUTO-RILEVAZIONE DELL'ERRORE E AGGIORNAMENTO TEC
             if attack_active.is_set():
-                # Il conflitto è stato rilevato, quindi il TEC aumenta in ogni ciclo di trasmissione
+                # Il conflitto è attivo: aumenta il TEC
                 victim_tec_sim, tec_change, status = update_tec(victim_tec_sim)
                 print(f"⚠️ [Vittima] Conflitto Dominante Rilevato! TEC Sim: {victim_tec_sim} ({tec_change:+d}) Stato: {status}")
             else:
+                # Nessun attacco rilevato: TEC invariato
                 print(f"✅ [Vittima] Bus Pulito. TEC Sim: {victim_tec_sim}")
 
-            # 4. Invio
+            # 2. Invio e Aggiornamento Contatore
             try:
                 msg_tx = can.Message(
                     arbitration_id=TARGET_ID,
-                    data=[message_counter % 256, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00],
+                    data=[tx_message_counter % 256, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00],
                     is_extended_id=False
                 )
                 bus.send(msg_tx)
                 print(f"🚀 [Vittima] Messaggio inviato (ID: {hex(TARGET_ID)}). In attesa di {TRANSMISSION_PERIOD_SEC}s...")
-                message_counter += 1
+                
+                # *** AGGIORNAMENTO CRITICO DEL CONTATORE ***
+                tx_message_counter += 1 
                 start_time = time.time()
             
             except Exception:
@@ -85,30 +85,44 @@ def start_victim_reactive():
     print("\n🛑 [Vittima] Disconnessa.")
 
 def sniff_for_attack_start(bus):
-    global attack_active
-    print(f"👂 [Vittima Listener] Monitoraggio per messaggi con ID {hex(TARGET_ID)} (Conflitto)...")
-    
-    # *** NUOVA VARIABILE DI STATO ***
-    own_message_sent = False
+    """
+    Simula la rilevazione implicita dell'errore. Si attiva solo se un messaggio con TARGET_ID
+    viene ricevuto quando la Vittima NON si aspetta il proprio messaggio (ovvero è l'Attaccante).
+    """
+    global attack_active, tx_message_counter
+    print(f"👂 [Vittima Listener] Monitoraggio per conflitti (ID: {hex(TARGET_ID)})...")
     
     while not attack_active.is_set():
+        # Legge tutti i messaggi che arrivano
         msg = bus.recv(timeout=None) 
         
         if msg is not None and msg.arbitration_id == TARGET_ID and msg.is_error_frame == False:
             
-            if not own_message_sent:
-                # Questo è il primo messaggio, assumiamo sia il messaggio della Vittima stessa.
-                # Lo impostiamo a True e lo ignoriamo.
-                own_message_sent = True
-                print(f"✅ [Vittima Listener] Rilevato il proprio primo messaggio. In attesa dell'Attaccante...")
-                continue # Salta il resto del ciclo e aspetta il messaggio successivo
+            # Se la Vittima non ha ancora inviato questo numero di messaggi, è il suo stesso messaggio.
+            # Il campo dati contiene il tx_message_counter nel primo byte.
+            # Se il contatore ricevuto nel messaggio (msg.data[0]) è maggiore o uguale
+            # al numero di messaggi che la Vittima ha finito di inviare (tx_message_counter),
+            # è un messaggio interno che stiamo monitorando.
             
-            else:
-                # Se own_message_sent è True e riceviamo ANCORA un TARGET_ID, 
-                # significa che l'Attaccante è partito.
-                print(f"🔥 [Vittima Listener] RILEVATO MESSAGGIO CON ID CONFLITTUALE. ATTACCO ATTIVO.")
-                attack_active.set() 
-                return
+            # Se il primo byte del messaggio ricevuto NON è l'indice del messaggio che
+            # la Vittima ha appena inviato, è un messaggio estraneo (l'Attaccante).
+            
+            # Nota: Questa è una potente euristica nella simulazione, assumendo che solo la Vittima
+            # aggiorni questo byte e che l'Attaccante mandi payload non sincronizzati.
+            
+            # Il contatore nel messaggio ricevuto dovrebbe essere uguale a tx_message_counter - 1 (se la Vittima è veloce)
+            # o uguale a tx_message_counter (se il thread riceve prima dell'aggiornamento del contatore).
+            
+            # Semplicemente: se il messaggio NON contiene il contatore dell'ultimo messaggio inviato, è l'attaccante.
+            # Qui si usa una logica più diretta: Se il contatore ricevuto è 0, e noi ne abbiamo già inviati, è un attacco.
+            
+            if msg.data[0] != (tx_message_counter - 1) % 256 and tx_message_counter > 0:
+                 # Il messaggio ricevuto ha un payload [0x00, ...] e la Vittima ha un contatore > 0.
+                 # Il messaggio dell'Attaccante (payload tutti zeri) differisce dal payload della Vittima.
+                 # Questo è il segnale che stiamo cercando.
+                 print(f"🔥 [Vittima Listener] RILEVATO MESSAGGIO ESTRANEO/CONFLITTUALE. ATTACCO ATTIVO.")
+                 attack_active.set() 
+                 return 
         
 if __name__ == '__main__':
-    start_victim_reactive()
+    start_victim_corrected()
