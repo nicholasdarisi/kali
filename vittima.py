@@ -85,23 +85,30 @@ def start_victim_reactive():
     print("\n🛑 [Vittima] Disconnessa.")
 
 def sniff_for_attack_start(bus):
-    """
-    Simula la rilevazione implicita dell'errore (Bit Monitoring) da parte della Vittima.
-    Un messaggio con TARGET_ID (l'attaccante) implica un conflitto Dominante/Recessivo.
-    """
     global attack_active
     print(f"👂 [Vittima Listener] Monitoraggio per messaggi con ID {hex(TARGET_ID)} (Conflitto)...")
     
+    # *** NUOVA VARIABILE DI STATO ***
+    own_message_sent = False
+    
     while not attack_active.is_set():
-        # Legge tutti i messaggi che arrivano
-        # Rilevare un messaggio con TARGET_ID significa che l'Attaccante sta inviando
-        # e, data la sua payload dominante, sta creando un conflitto Bit Error.
         msg = bus.recv(timeout=None) 
         
         if msg is not None and msg.arbitration_id == TARGET_ID and msg.is_error_frame == False:
-            print(f"🔥 [Vittima Listener] RILEVATO MESSAGGIO CON ID CONFLITTUALE. ATTACCO ATTIVO.")
-            attack_active.set() # Attiva la logica di aumento TEC
-            return # Termina il thread listener
+            
+            if not own_message_sent:
+                # Questo è il primo messaggio, assumiamo sia il messaggio della Vittima stessa.
+                # Lo impostiamo a True e lo ignoriamo.
+                own_message_sent = True
+                print(f"✅ [Vittima Listener] Rilevato il proprio primo messaggio. In attesa dell'Attaccante...")
+                continue # Salta il resto del ciclo e aspetta il messaggio successivo
+            
+            else:
+                # Se own_message_sent è True e riceviamo ANCORA un TARGET_ID, 
+                # significa che l'Attaccante è partito.
+                print(f"🔥 [Vittima Listener] RILEVATO MESSAGGIO CON ID CONFLITTUALE. ATTACCO ATTIVO.")
+                attack_active.set() 
+                return
         
 if __name__ == '__main__':
     start_victim_reactive()
