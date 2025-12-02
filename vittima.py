@@ -1,38 +1,70 @@
 import can
 import time
+import threading
+import sys
 
 # --- CONFIGURAZIONE ---
 CAN_INTERFACE = 'vcan0'
-TARGET_ID = 0x123
-KILL_ID = 0x777  # ID speciale per la terminazione
+TARGET_ID = 0x123 
 TRANSMISSION_PERIOD_SEC = 5.0
+BUS_OFF_THRESHOLD = 256
+TEC_PASSIVE_THRESHOLD = 128
+INITIAL_TEC = 0
 # ----------------------
 
-def start_victim_receiving():
+# Variabili condivise per il TEC SIMULATO della Vittima
+victim_tec_sim = INITIAL_TEC
+attack_active = threading.Event() # Flag: L'errore è stato rilevato
+
+def update_tec(current_tec):
+    """Calcola il nuovo TEC della Vittima in base alla fase dell'attacco."""
+    # La Vittima non sa se l'attaccante è fermo, quindi continua ad aumentare il TEC.
+    if current_tec < TEC_PASSIVE_THRESHOLD:
+        # Fase 1: Error Active -> Aumento di +8
+        return current_tec + 8, 8, "Active"
+    else:
+        # Fase 2: Error Passive -> Aumento di +7 (Netto +8 -1)
+        return current_tec + 7, 7, "Passive"
+
+def start_victim_reactive():
+    global victim_tec_sim, attack_active
     
     try:
         bus = can.interface.Bus(channel=CAN_INTERFACE, bustype='socketcan', receive_own_messages=True)
-        print(f"✅ [Vittima] Connessa a {CAN_INTERFACE}. In attesa di segnale KILL: {hex(KILL_ID)}")
+        print(f"✅ [Vittima] Connessa a {CAN_INTERFACE}. TEC Iniziale: {victim_tec_sim}")
     except OSError as e:
         print(f"❌ [Vittima] Errore di connessione: {e}")
         return
 
     message_counter = 0
     start_time = time.time()
+    
+    # Listener per rilevare l'inizio dell'attacco (ovvero il conflitto ID)
+    listener_thread = threading.Thread(target=sniff_for_attack_start, args=(bus,))
+    listener_thread.daemon = True
+    listener_thread.start()
 
     while True:
-        # 1. RICEZIONE/CHECK SEGNALE DI TERMINAZIONE
-        # Controlla velocemente se ci sono messaggi dall'Attaccante
-        msg = bus.recv(timeout=0.01) 
-        if msg is not None and msg.arbitration_id == KILL_ID:
-            print(f"\n🚨🚨 [Vittima] SEGNALE KILL RICEVUTO ({hex(KILL_ID)}). Terminazione forzata.")
+        
+        # 1. CHECK AUTO-TERMINAZIONE (Bus Off simulato)
+        if victim_tec_sim >= BUS_OFF_THRESHOLD:
+            print(f"\n🚨🚨 [Vittima] BUS OFF RILEVATO! (TEC Sim: {victim_tec_sim}). Auto-terminazione.")
             break
-
+        
         # 2. Ciclo di Trasmissione (solo se è tempo)
         if (time.time() - start_time) >= TRANSMISSION_PERIOD_SEC:
             
             print(f"\n--- CICLO VITTIMA #{message_counter+1} ({time.strftime('%H:%M:%S')}) ---")
             
+            # 3. AUTO-RILEVAZIONE DELL'ERRORE E AGGIORNAMENTO TEC
+            if attack_active.is_set():
+                # Il conflitto è stato rilevato, quindi il TEC aumenta in ogni ciclo di trasmissione
+                victim_tec_sim, tec_change, status = update_tec(victim_tec_sim)
+                print(f"⚠️ [Vittima] Conflitto Dominante Rilevato! TEC Sim: {victim_tec_sim} ({tec_change:+d}) Stato: {status}")
+            else:
+                print(f"✅ [Vittima] Bus Pulito. TEC Sim: {victim_tec_sim}")
+
+            # 4. Invio
             try:
                 msg_tx = can.Message(
                     arbitration_id=TARGET_ID,
@@ -44,18 +76,32 @@ def start_victim_receiving():
                 message_counter += 1
                 start_time = time.time()
             
-            except can.CanError as e:
-                print(f"⚠️ [Vittima] Errore di trasmissione CAN: {e}. Interruzione.")
-                break 
-            except OSError as e:
-                print(f"❌ [Vittima] Errore di sistema: {e}. Interruzione.")
+            except Exception:
                 break
         
-        # Mantiene il ciclo attivo per il check del timeout
         time.sleep(0.01)
 
     bus.shutdown()
     print("\n🛑 [Vittima] Disconnessa.")
 
+def sniff_for_attack_start(bus):
+    """
+    Simula la rilevazione implicita dell'errore (Bit Monitoring) da parte della Vittima.
+    Un messaggio con TARGET_ID (l'attaccante) implica un conflitto Dominante/Recessivo.
+    """
+    global attack_active
+    print(f"👂 [Vittima Listener] Monitoraggio per messaggi con ID {hex(TARGET_ID)} (Conflitto)...")
+    
+    while not attack_active.is_set():
+        # Legge tutti i messaggi che arrivano
+        # Rilevare un messaggio con TARGET_ID significa che l'Attaccante sta inviando
+        # e, data la sua payload dominante, sta creando un conflitto Bit Error.
+        msg = bus.recv(timeout=None) 
+        
+        if msg is not None and msg.arbitration_id == TARGET_ID and msg.is_error_frame == False:
+            print(f"🔥 [Vittima Listener] RILEVATO MESSAGGIO CON ID CONFLITTUALE. ATTACCO ATTIVO.")
+            attack_active.set() # Attiva la logica di aumento TEC
+            return # Termina il thread listener
+        
 if __name__ == '__main__':
-    start_victim_receiving()
+    start_victim_reactive()
