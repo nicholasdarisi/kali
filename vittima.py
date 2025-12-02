@@ -3,74 +3,96 @@ import time
 import subprocess
 import re
 
-# Configurazione
+# --- CONFIGURAZIONE ---
 CAN_INTERFACE = 'vcan0'
-TARGET_ID = 0x123 # ID del messaggio che l'attaccante prenderà di mira
+TARGET_ID = 0x123
+TRANSMISSION_PERIOD_SEC = 5.0
 BUS_OFF_THRESHOLD = 256
+# ----------------------
 
-def get_tec_from_socketcan(interface):
+def get_tec_info(interface):
     """
-    Legge il valore di TEC (Transmit Error Counter) dall'interfaccia SocketCAN.
+    Legge il valore di TEC (Transmit Error Counter) e lo stato del bus dal kernel.
     """
     try:
         command = ['ip', '-details', 'link', 'show', interface]
         result = subprocess.run(command, capture_output=True, text=True, check=True)
+        output = result.stdout
         
-        # Cerca la riga che contiene i contatori TEC e REC
-        match = re.search(r'tec\s+(\d+)\s+rec\s+(\d+)', result.stdout)
+        tec_match = re.search(r'tec\s+(\d+)\s+rec\s+(\d+)', output)
+        # Cerca lo stato come BUS-OFF, ERROR-PASSIVE, ecc.
+        state_match = re.search(r'state\s+(\S+)', output) 
+
+        tec_value = int(tec_match.group(1)) if tec_match else -1
+        # Usiamo solo la prima parte dello stato (es: da 'BUS-OFF' a 'BUS')
+        state = state_match.group(1).split('-')[0] if state_match else "UNKNOWN"
         
-        if match:
-            return int(match.group(1))
-        else:
-            return -1 # Valore di errore o non disponibile
+        return tec_value, state
             
-    except Exception:
-        return -2 # Errore di esecuzione
+    except Exception as e:
+        # Errore, ad esempio se l'interfaccia non esiste o 'ip' fallisce.
+        return -2, "ERROR"
 
 def start_victim():
-    """Simula la vittima che trasmette e monitora il suo stato TEC."""
+    """Simula la vittima che trasmette e monitora il suo TEC reale."""
     
     try:
-        bus = can.interface.Bus(channel=CAN_INTERFACE, bustype='socketcan')
-        print(f"✅ Vittima connessa a {CAN_INTERFACE}. Inizia a trasmettere ID: {hex(TARGET_ID)}")
+        # Aggiungo receive_own_messages=True per garantire che il nodo si veda sul bus
+        bus = can.interface.Bus(channel=CAN_INTERFACE, bustype='socketcan', receive_own_messages=True)
+        print(f"✅ [Vittima] Connessa a {CAN_INTERFACE}. ID bersaglio: {hex(TARGET_ID)}")
     except OSError as e:
-        print(f"❌ Errore di connessione a {CAN_INTERFACE}: {e}")
+        print(f"❌ [Vittima] Errore di connessione a {CAN_INTERFACE}: {e}")
         return
 
     message_counter = 0
 
     while True:
-        tec = get_tec_from_socketcan(CAN_INTERFACE)
-        
-        if tec >= BUS_OFF_THRESHOLD:
-            print(f"\n🚨🚨 [Vittima] BUS OFF RILEVATO! (TEC={tec}). Trasmissione interrotta.")
+        # 1. MONITORAGGIO TEC REALE E STATO
+        tec_real, status_real = get_tec_info(CAN_INTERFACE)
+
+        print(f"\n--- CICLO VITTIMA #{message_counter+1} ({time.strftime('%H:%M:%S')}) ---")
+        print(f"🔬 [Vittima] TEC REALE: {tec_real}. Stato Kernel: {status_real}")
+
+        # 2. CONTROLLO BUS OFF
+        if status_real == "BUS": # Rileva BUS-OFF
+            print(f"🚨🚨 [Vittima] RILEVATO STATO **BUS OFF** nel kernel. Trasmissione interrotta!")
             break
-        elif tec >= 128:
-            print(f"🔬 [Vittima] Stato: ERROR PASSIVE (TEC={tec}). Continuo a trasmettere...")
-        else:
-            print(f"🔬 [Vittima] Stato: ERROR ACTIVE (TEC={tec}). Continuo a trasmettere...")
         
-        # Invio del Messaggio Periodico
+        # 3. CREAZIONE E INVIO DEL MESSAGGIO PERIODICO
         try:
             msg = can.Message(
                 arbitration_id=TARGET_ID,
-                data=[message_counter % 256, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+                data=[message_counter % 256, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00],
                 is_extended_id=False
             )
             bus.send(msg)
+            print(f"🚀 [Vittima] Messaggio inviato (ID: {hex(TARGET_ID)}). Attesa {TRANSMISSION_PERIOD_SEC}s...")
             message_counter += 1
-            time.sleep(0.02) # T = 20ms, simile a un ciclo reale
+            time.sleep(TRANSMISSION_PERIOD_SEC) 
         
         except can.CanError as e:
-            print(f"⚠️ [Vittima] Errore di trasmissione CAN: {e}. Probabile Bus Off.")
+            print(f"⚠️ [Vittima] Errore di trasmissione CAN: {e}. Interruzione.")
             break 
         except OSError as e:
-            # Cattura errori del sistema operativo (es. "Device not configured")
-            print(f"❌ [Vittima] Errore critico di sistema: {e}. Il bus è probabilmente Bus Off.")
+            print(f"❌ [Vittima] Errore di sistema: {e}. Il bus è probabilmente Bus Off.")
             break
 
     bus.shutdown()
-    print("\n🛑 Vittima Disconnessa.")
+    print("\n🛑 [Vittima] Disconnessa.")
 
 if __name__ == '__main__':
+    # Esegui la stessa funzione di utilità nel contesto dello script per la Vittima
+    def get_tec_info(interface):
+        try:
+            command = ['ip', '-details', 'link', 'show', interface]
+            result = subprocess.run(command, capture_output=True, text=True, check=True)
+            output = result.stdout
+            tec_match = re.search(r'tec\s+(\d+)\s+rec\s+(\d+)', output)
+            state_match = re.search(r'state\s+(\S+)', output)
+            tec_value = int(tec_match.group(1)) if tec_match else -1
+            state = state_match.group(1).split('-')[0] if state_match else "UNKNOWN"
+            return tec_value, state
+        except Exception:
+            return -2, "ERROR"
+    
     start_victim()
