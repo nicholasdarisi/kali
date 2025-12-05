@@ -155,51 +155,51 @@ class ECU:
         return bytes(random.randint(0, 255) for _ in range(8))
 
     def _tx_loop(self):
-    """Loop periodico di trasmissione (per ECU NORMAL/VICTIM)."""
-    next_tx = time.time()
-
-    while not self._stop:
-        if self.state == NodeState.BUS_OFF:
-            print(f"[{self.name}] BUS OFF: Impossibile trasmettere. TEC={self.tec}")
-            time.sleep(1.0)
-            continue
-
-        now = time.time()
-        if self.period > 0 and now >= next_tx:
-            payload = self._build_payload()
-            msg = can.Message(
-                arbitration_id=self.arb_id,
-                data=payload,
-                is_extended_id=False,
-            )
-
-            try:
-                # Segno che sto trasmettendo
-                self.currently_transmitting = True
-                self.last_tx_data = payload
-                self.last_tx_time = now
-
-                # Finestra in cui mi aspetto un ERROR_FLAG (es. 20 ms)
-                self.tx_deadline = now + 0.02
-
-                self.bus.send(msg)
-                print(f"[{self.name}] TX id=0x{self.arb_id:X} data={payload.hex().upper()} "
-                      f"(state={self.state.name}, TEC={self.tec})")
-
-                # ⚠️ NIENTE recv qui, niente _monitor_for_bit_error e niente _on_tx_*:
-                #   - il successo/errore viene deciso da _rx_loop
-                #   - se arriva un ERROR_FLAG mentre sto trasmettendo → _on_tx_error()
-                #   - se NON arriva nulla entro tx_deadline → _on_tx_success()
-
-            except can.CanError as e:
-                print(f"[{self.name}] Errore invio frame: {e}")
-                # Errore driver → consideralo errore TX
-                self._on_tx_error()
-                self.currently_transmitting = False
-
-            next_tx += self.period
-
-        time.sleep(0.02)
+        """Loop periodico di trasmissione (per ECU NORMAL/VICTIM)."""
+        next_tx = time.time()
+    
+        while not self._stop:
+            if self.state == NodeState.BUS_OFF:
+                print(f"[{self.name}] BUS OFF: Impossibile trasmettere. TEC={self.tec}")
+                time.sleep(1.0)
+                continue
+    
+            now = time.time()
+            if self.period > 0 and now >= next_tx:
+                payload = self._build_payload()
+                msg = can.Message(
+                    arbitration_id=self.arb_id,
+                    data=payload,
+                    is_extended_id=False,
+                )
+    
+                try:
+                    # Segno che sto trasmettendo
+                    self.currently_transmitting = True
+                    self.last_tx_data = payload
+                    self.last_tx_time = now
+    
+                    # Finestra in cui mi aspetto un ERROR_FLAG (es. 20 ms)
+                    self.tx_deadline = now + 0.02
+    
+                    self.bus.send(msg)
+                    print(f"[{self.name}] TX id=0x{self.arb_id:X} data={payload.hex().upper()} "
+                          f"(state={self.state.name}, TEC={self.tec})")
+    
+                    # ⚠️ NIENTE recv qui, niente _monitor_for_bit_error e niente _on_tx_*:
+                    #   - il successo/errore viene deciso da _rx_loop
+                    #   - se arriva un ERROR_FLAG mentre sto trasmettendo → _on_tx_error()
+                    #   - se NON arriva nulla entro tx_deadline → _on_tx_success()
+    
+                except can.CanError as e:
+                    print(f"[{self.name}] Errore invio frame: {e}")
+                    # Errore driver → consideralo errore TX
+                    self._on_tx_error()
+                    self.currently_transmitting = False
+    
+                next_tx += self.period
+    
+            time.sleep(0.02)
 
     def _monitor_for_bit_error(self) -> bool:
         """
