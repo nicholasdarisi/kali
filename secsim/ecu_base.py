@@ -162,11 +162,8 @@ class ECU:
             now = time.time()
             if self.period > 0 and now >= next_tx:
                 payload = self._build_payload()
-                msg = can.Message(
-                    arbitration_id=self.arb_id,
-                    data=payload,
-                    is_extended_id=False,
-                )
+                msg = can.Message(arbitration_id=self.arb_id, data=payload, is_extended_id=False)
+                
                 try:
                     self.currently_transmitting = True
                     self.last_tx_data = payload
@@ -175,44 +172,50 @@ class ECU:
                     self.bus.send(msg)
                     print(f"[{self.name}] TX id=0x{self.arb_id:X} data={payload.hex().upper()} (state={self.state.name}, TEC={self.tec})")
 
-                    # Dopo l'invio, supponiamo successo
-                    self._on_tx_success() 
+                    # RIMOSSO: self._on_tx_success() da qui! Non cantare vittoria troppo presto.
 
-                    # Finestra di ascolto critica subito dopo l'invio (simula Bit Monitoring)
-                    self._monitor_for_bit_error()
+                    # Finestra di ascolto critica: AUMENTATO TIMEOUT A 0.2s (200ms)
+                    # Python è lento, 10ms è troppo poco per garantire che l'altro thread risponda.
+                    collision_detected = self._monitor_for_bit_error(timeout=0.2)
+
+                    if not collision_detected:
+                        # Solo se NON c'è stato errore, allora è un successo
+                        self._on_tx_success()
+                        print(f"[{self.name}] TX Success confermato (Nessun bit error).")
 
                 except can.CanError as e:
                     print(f"[{self.name}] Errore invio frame: {e}")
+                    self._on_tx_error()
 
                 finally:
                     self.currently_transmitting = False
 
                 next_tx += self.period
-
             time.sleep(0.02)
 
-    def _monitor_for_bit_error(self):
+    def _monitor_for_bit_error(self, timeout=0.2) -> bool:
         """
-        Ascolta immediatamente dopo la TX per rilevare se l'Attaccante ha causato un Bit Error.
-        Questa è la simulazione del Bit Monitoring fallito.
+        Ritorna True se è stato rilevato un errore (e gestito), False se tutto ok.
         """
-        # Timeout molto stretto (10ms)
         try:
-            # L'Attaccante invia un frame con il nostro ID subito dopo il nostro invio
-            attack_msg = self.bus.recv(timeout=0.01) 
+            # Aumentato timeout per compensare la lentezza di Python
+            attack_msg = self.bus.recv(timeout=timeout) 
             
             if attack_msg is not None and attack_msg.arbitration_id == self.arb_id:
-                    if attack_msg.data != self.last_tx_data:
-                        #Se un frame con il MIO ID è arrivato subito dopo il mio TX, 
-                        # l'Attaccante ha causato un conflitto Bit Error.
-                        print(f"[{self.name}] Rilevato messaggio in conflitto subito dopo TX.")
-                
-                        # Simula la generazione immediata dell'Error Frame 
-                        self._send_error_flag()
-                        self._on_tx_error()
+                # Controllo se i dati sono diversi
+                if attack_msg.data != self.last_tx_data:
+                    print(f"[{self.name}] CONFLITTO RILEVATO! Atteso: {self.last_tx_data.hex()}, Ricevuto: {attack_msg.data.hex()}")
+            
+                    # 1. Invia Error Flag
+                    self._send_error_flag()
+                    # 2. Incrementa TEC
+                    self._on_tx_error()
+                    return True # Errore rilevato
         
         except can.CanError:
-            pass # Ignora errori di lettura bus
+            pass 
+        
+        return False # Nessun errore rilevato
         
         
     def _rx_loop(self):
