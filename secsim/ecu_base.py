@@ -50,6 +50,8 @@ class ECU:
         self.currently_transmitting = False
         self.last_tx_data = None
         self.last_tx_time = 0.0
+        self.last_rx_id = None
+        self.last_rx_time = 0.0
 
         # Configurazione SocketCAN (interface='socketcan')
         self.bus = can.interface.Bus(channel=self.iface, interface="socketcan", receive_own_messages=False)
@@ -232,35 +234,45 @@ class ECU:
                     self.collision_event.set()
                 else:
                     # Ero in ascolto e qualcuno ha segnalato errore
-                    self._on_rx_error_flag()
+                    self._on_rx_error_flag() # REC AUMENTA
                     print(f"[{self.name}] Rilevato ERROR_FLAG {flag_type.name} da RX -> REC={self.rec}")
                 continue
 
             # ---------------------------------------------------------
-            # 2) RILEVAMENTO ATTACCO (Collisione sul mio ID)
+            # 2) RILEVAMENTO ATTACCO (Collisione sul mio ID - Per la Vittima)
             # ---------------------------------------------------------
-            # Se ricevo un messaggio con il MIO ID (e receive_own_messages=False),
-            # significa che l'Attaccante ha sovrascritto il bus.
             if msg.arbitration_id == self.arb_id:
                 print(f"[{self.name}] CRITICO: Rilevato messaggio ostile (Attacco) con mio ID. Data={msg.data.hex()}")
-                
-                # 1. Segnalo l'incidente al thread TX (così non fa _on_tx_success)
                 self.collision_event.set()
-                
-                # 2. Reazione immediata: Invio Error Flag
                 self._send_error_flag()
-                
-                # 3. Penalità: Aumento il TEC
                 self._on_tx_error() 
-                
-                # Non processo questo messaggio come "ricevuto correttamente"
                 continue
 
             # ---------------------------------------------------------
-            # 3) FRAME NORMALI (RX successo da altri nodi)
+            # 3) FRAME NORMALI E FILTRO ANTI-FALSI SUCCESSI (Per la Terza ECU)
             # ---------------------------------------------------------
-            self._on_rx_success()
-            self._handle_normal_frame(msg)
+            now = time.time()
+            
+            # Controllo se è un duplicato ravvicinato (l'attacco che arriva subito dopo)
+            is_collision_artifact = (
+                self.last_rx_id is not None and 
+                self.last_rx_id == msg.arbitration_id and 
+                (now - self.last_rx_time) < 0.02 # 20ms finestra temporale
+            )
+
+            # Aggiorno memoria
+            self.last_rx_id = msg.arbitration_id
+            self.last_rx_time = now
+
+            if is_collision_artifact:
+                # È la copia corrotta/doppia generata dall'attacco. 
+                # NON considerarlo successo, ma trattalo come errore (o rumore).
+                print(f"[{self.name}] Ignorato frame duplicato (Collisione) -> REC AUMENTA")
+                self._on_rx_error_flag() # REC +1
+            else:
+                # Messaggio pulito -> Successo
+                self._on_rx_success() # REC -1
+                self._handle_normal_frame(msg)
 
     def _handle_normal_frame(self, msg: can.Message):
         """Hook per la logica specifica del ruolo (Attacker)."""
