@@ -52,6 +52,7 @@ class ECU:
         self.last_tx_time = 0.0
         self.last_rx_id = None
         self.last_rx_time = 0.0
+        self.last_rx_decremented = False
 
         # Configurazione SocketCAN (interface='socketcan')
         self.bus = can.interface.Bus(channel=self.iface, interface="socketcan", receive_own_messages=False)
@@ -211,59 +212,51 @@ class ECU:
         while not self._stop:
             try:
                 msg = self.bus.recv(timeout=0.1)
-            except can.CanError as e:
-                print(f"[{self.name}] Errore recv: {e}")
+            except can.CanError:
                 continue
 
             if msg is None:
                 continue
 
             # ---------------------------------------------------------
-            # 1) GESTIONE ERROR FRAME (Modificato per Passive)
+            # 1) GESTIONE ERROR FRAME (Con logica Passive/Active)
             # ---------------------------------------------------------
             if msg.arbitration_id == ERROR_FLAG_ID:
-                # Leggiamo se è ACTIVE (0) o PASSIVE (1)
                 flag_type = ErrorFlagType(msg.data[0]) if msg.data and msg.data[0] in (0, 1) else ErrorFlagType.ACTIVE
 
                 if self.currently_transmitting:
-                    # Se stavo trasmettendo, è sempre un problema per me (TEC aumenta)
+                    # Logica trasmettitore
                     self._on_tx_error()
-                    print(f"[{self.name}] Rilevato ERROR_FLAG {flag_type.name} mentre trasmettevo -> TEC={self.tec}")
-                    
-                    # Se sono io la vittima (Normal), rispondo con il mio flag
-                    self._send_error_flag() 
+                    self._send_error_flag()
                     self.collision_event.set()
-                
                 else:
-                    # --- FIX PROBLEMA 2: Comportamento da Osservatore (Terza ECU) ---
+                    # Logica Osservatore (Terza ECU)
                     if flag_type == ErrorFlagType.ACTIVE:
-                        # ACTIVE: Il bus è stato corrotto (6 bit dominanti). È un errore per tutti.
-                        self._on_rx_error_flag() # REC AUMENTA
-                        print(f"[{self.name}] Rilevato ACTIVE Error Flag -> REC +1 (Tot: {self.rec})")
+                        # ACTIVE -> Errore vero -> REC AUMENTA
+                        self._on_rx_error_flag() 
+                        print(f"[{self.name}] ACTIVE Error Flag -> REC +1 (Tot: {self.rec})")
                     else:
-                        # PASSIVE: Sono 6 bit recessivi. Non corrompono il bus.
-                        # Per un osservatore esterno, questo NON è un errore di bus.
-                        # Ignoriamo l'incremento del REC.
-                        print(f"[{self.name}] Rilevato PASSIVE Error Flag -> Ignorato (REC resta {self.rec})")
-                
+                        # PASSIVE -> Il bus funziona, ma noi avevamo contato un errore per il duplicato.
+                        # Dobbiamo annullare quell'errore per far scendere il REC.
+                        if self.rec > 0:
+                            self.rec -= 1
+                        print(f"[{self.name}] PASSIVE Error Flag -> Compensazione (REC scende a {self.rec})")
                 continue
 
             # ---------------------------------------------------------
-            # 2) RILEVAMENTO ATTACCO (Solo per chi subisce l'ID clash)
+            # 2) RILEVAMENTO ATTACCO (ID MIO)
             # ---------------------------------------------------------
             if msg.arbitration_id == self.arb_id:
-                print(f"[{self.name}] CRITICO: Rilevato messaggio ostile (Attacco) con mio ID.")
                 self.collision_event.set()
                 self._send_error_flag()
-                self._on_tx_error() 
+                self._on_tx_error()
                 continue
 
             # ---------------------------------------------------------
-            # 3) FRAME NORMALI E FILTRO ANTI-FALSI SUCCESSI
+            # 3) FRAME NORMALI 
             # ---------------------------------------------------------
             now = time.time()
             
-            # Controllo duplicati ravvicinati (Collisione vista da fuori)
             is_collision_artifact = (
                 self.last_rx_id is not None and 
                 self.last_rx_id == msg.arbitration_id and 
@@ -274,16 +267,30 @@ class ECU:
             self.last_rx_time = now
 
             if is_collision_artifact:
-                # Anche qui, se la vittima è passiva, tecnicamente il suo messaggio "perde"
-                # senza distruggere quello dell'attaccante. 
-                # Tuttavia, per semplicità, se vediamo due frame identici, contiamo errore 
-                # SOLO SE siamo ancora nella fase "caotica". 
-                # Ma grazie al fix sopra (Error Flag Passive ignorato), il REC smetterà di salire a dismisura.
-                print(f"[{self.name}] Frame duplicato (Collisione) -> REC +1")
-                self._on_rx_error_flag() 
+                # --- FIX PROBLEMA 1 (REC parte da 0) ---
+                # Aumento il REC per annullare il successo precedente, 
+                # MA SOLO SE il successo precedente aveva davvero abbassato il REC.
+                # Se eravamo a 0 ed siamo rimasti a 0, non dobbiamo salire a 1 qui.
+                if self.last_rx_decremented:
+                    self._on_rx_error_flag() # REC +1 (Annulla il -1 precedente)
+                    print(f"[{self.name}] Collisione -> REC ripristinato (aveva decrementato)")
+                else:
+                    print(f"[{self.name}] Collisione -> REC invariato (era già a 0)")
+                
+                # Resettiamo il flag per il prossimo giro
+                self.last_rx_decremented = False 
+
             else:
-                # Messaggio valido -> REC SCENDE
-                self._on_rx_success() 
+                # --- LOGICA SUCCESSO STANDARD ---
+                # Eseguo manualmente _on_rx_success per tracciare se decrementa davvero
+                if self.rec > 0:
+                    self.rec -= 1
+                    self.last_rx_decremented = True # Ho tolto 1
+                else:
+                    # REC era 0, è rimasto 0
+                    self.last_rx_decremented = False # Non ho tolto nulla
+                
+                self._update_state()
                 self._handle_normal_frame(msg)
 
     def _handle_normal_frame(self, msg: can.Message):
