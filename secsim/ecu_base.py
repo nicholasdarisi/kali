@@ -56,6 +56,7 @@ class ECU:
 
         # Thread TX/RX
         self._stop = False
+        self.collision_event = threading.Event()
         self.tx_thread = threading.Thread(target=self._tx_loop, daemon=True)
         self.rx_thread = threading.Thread(target=self._rx_loop, daemon=True)
         
@@ -171,22 +172,29 @@ class ECU:
                     self.currently_transmitting = True
                     self.last_tx_data = payload
                     self.last_tx_time = now
+                    
+                    # RESETTO l'evento di collisione prima di iniziare a trasmettere
+                    self.collision_event.clear()
     
                     self.bus.send(msg)
                     print(f"[{self.name}] TX id=0x{self.arb_id:X} data={payload.hex().upper()} "
                           f"(state={self.state.name}, TEC={self.tec})")
     
-                    had_error = self._monitor_for_bit_error()
-    
-                    if not had_error:
-                        # Solo se NON c'è stato bit error → TX OK
+                    # --- SINCRONIZZAZIONE ---
+                    # Invece di leggere dal bus (che lo fa già rx_loop), aspetto un segnale.
+                    # Se l'RX loop vede un attacco o un Error Flag entro 0.1s, sblocca questo wait.
+                    
+                    collision_occurred = self.collision_event.wait(timeout=0.1)
+                    
+                    if collision_occurred:
+                        # RX Loop ha rilevato il problema e ha già chiamato _on_tx_error()
+                        print(f"[{self.name}] TX fallita -> Collisione confermata dal RX loop.")
+                    else:
+                        # Nessuna notizia = Buona notizia. Nessun attacco rilevato nel timeout.
                         self._on_tx_success()
-                    # Se had_error == True:
-                    # - abbiamo già mandato ERROR_FLAG in _monitor_for_bit_error()
-                    # - il nostro _rx_loop farà _on_tx_error() quando lo riceve
     
                 except can.CanError as e:
-                    print(f"[{self.name}] Errore invio frame: {e}")
+                    print(f"[{self.name}] Errore invio frame (Driver): {e}")
                     self._on_tx_error()
     
                 finally:
@@ -194,28 +202,13 @@ class ECU:
                     next_tx += self.period
     
             time.sleep(0.02)
-
-    ddef _monitor_for_bit_error(self) -> bool:
-        """
-        Ritorna True se ho visto un attacco che genera BIT ERROR sul mio TX.
-        """
-        try:
-            attack_msg = self.bus.recv(timeout=0.01)
-            if attack_msg is not None and attack_msg.arbitration_id == self.arb_id:
-                if attack_msg.data != self.last_tx_data:
-                    print(f"[{self.name}] Rilevato messaggio in conflitto subito dopo TX.")
-                    self._send_error_flag()
-                    # ⚠️ NON chiamare _on_tx_error() qui
-                    return True
-        except can.CanError:
-            pass
-        return False
         
         
     def _rx_loop(self):
-        """Loop di ricezione e gestione degli Error Flags."""
+        """Loop di ricezione e gestione degli Error Flags e Collisioni."""
         while not self._stop:
             try:
+                # Timeout breve per permettere allo script di chiudersi se _stop diventa True
                 msg = self.bus.recv(timeout=0.1)
             except can.CanError as e:
                 print(f"[{self.name}] Errore recv: {e}")
@@ -224,23 +217,48 @@ class ECU:
             if msg is None:
                 continue
 
-            # 1) Error frame simulato (Qualcuno ha rilevato un errore)
+            # ---------------------------------------------------------
+            # 1) GESTIONE ERROR FRAME (Qualcuno ha segnalato errore)
+            # ---------------------------------------------------------
             if msg.arbitration_id == ERROR_FLAG_ID:
                 flag_type = ErrorFlagType(msg.data[0]) if msg.data and msg.data[0] in (0, 1) else ErrorFlagType.ACTIVE
 
                 if self.currently_transmitting:
-                    # Rilevato il proprio errore
+                    # Stavo trasmettendo e qualcuno mi ha segnalato errore -> Sono io il colpevole
                     self._on_tx_error()
-                    print(f"[{self.name}] Rilevato ERROR_FLAG {flag_type.name} mentre trasmette → TEC={self.tec}, state={self.state.name}")
-                    self._send_error_flag() # Risponde con il proprio Error Flag
-
+                    print(f"[{self.name}] Rilevato ERROR_FLAG {flag_type.name} mentre trasmettevo -> TEC={self.tec}")
+                    self._send_error_flag() # Rispondo con il mio flag
+                    # Avviso il TX loop che c'è stato un errore esterno
+                    self.collision_event.set()
                 else:
-                    # Rilevato l'errore di qualcun altro
+                    # Ero in ascolto e qualcuno ha segnalato errore
                     self._on_rx_error_flag()
-                    print(f"[{self.name}] Rilevato ERROR_FLAG {flag_type.name} da RX → REC={self.rec}, state={self.state.name}")
+                    print(f"[{self.name}] Rilevato ERROR_FLAG {flag_type.name} da RX -> REC={self.rec}")
                 continue
 
-            # 2) Frame normali (RX successo)
+            # ---------------------------------------------------------
+            # 2) RILEVAMENTO ATTACCO (Collisione sul mio ID)
+            # ---------------------------------------------------------
+            # Se ricevo un messaggio con il MIO ID (e receive_own_messages=False),
+            # significa che l'Attaccante ha sovrascritto il bus.
+            if msg.arbitration_id == self.arb_id:
+                print(f"[{self.name}] CRITICO: Rilevato messaggio ostile (Attacco) con mio ID. Data={msg.data.hex()}")
+                
+                # 1. Segnalo l'incidente al thread TX (così non fa _on_tx_success)
+                self.collision_event.set()
+                
+                # 2. Reazione immediata: Invio Error Flag
+                self._send_error_flag()
+                
+                # 3. Penalità: Aumento il TEC
+                self._on_tx_error() 
+                
+                # Non processo questo messaggio come "ricevuto correttamente"
+                continue
+
+            # ---------------------------------------------------------
+            # 3) FRAME NORMALI (RX successo da altri nodi)
+            # ---------------------------------------------------------
             self._on_rx_success()
             self._handle_normal_frame(msg)
 
