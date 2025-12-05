@@ -210,7 +210,6 @@ class ECU:
         """Loop di ricezione e gestione degli Error Flags e Collisioni."""
         while not self._stop:
             try:
-                # Timeout breve per permettere allo script di chiudersi se _stop diventa True
                 msg = self.bus.recv(timeout=0.1)
             except can.CanError as e:
                 print(f"[{self.name}] Errore recv: {e}")
@@ -220,58 +219,71 @@ class ECU:
                 continue
 
             # ---------------------------------------------------------
-            # 1) GESTIONE ERROR FRAME (Qualcuno ha segnalato errore)
+            # 1) GESTIONE ERROR FRAME (Modificato per Passive)
             # ---------------------------------------------------------
             if msg.arbitration_id == ERROR_FLAG_ID:
+                # Leggiamo se è ACTIVE (0) o PASSIVE (1)
                 flag_type = ErrorFlagType(msg.data[0]) if msg.data and msg.data[0] in (0, 1) else ErrorFlagType.ACTIVE
 
                 if self.currently_transmitting:
-                    # Stavo trasmettendo e qualcuno mi ha segnalato errore -> Sono io il colpevole
+                    # Se stavo trasmettendo, è sempre un problema per me (TEC aumenta)
                     self._on_tx_error()
                     print(f"[{self.name}] Rilevato ERROR_FLAG {flag_type.name} mentre trasmettevo -> TEC={self.tec}")
-                    self._send_error_flag() # Rispondo con il mio flag
-                    # Avviso il TX loop che c'è stato un errore esterno
+                    
+                    # Se sono io la vittima (Normal), rispondo con il mio flag
+                    self._send_error_flag() 
                     self.collision_event.set()
+                
                 else:
-                    # Ero in ascolto e qualcuno ha segnalato errore
-                    self._on_rx_error_flag() # REC AUMENTA
-                    print(f"[{self.name}] Rilevato ERROR_FLAG {flag_type.name} da RX -> REC={self.rec}")
+                    # --- FIX PROBLEMA 2: Comportamento da Osservatore (Terza ECU) ---
+                    if flag_type == ErrorFlagType.ACTIVE:
+                        # ACTIVE: Il bus è stato corrotto (6 bit dominanti). È un errore per tutti.
+                        self._on_rx_error_flag() # REC AUMENTA
+                        print(f"[{self.name}] Rilevato ACTIVE Error Flag -> REC +1 (Tot: {self.rec})")
+                    else:
+                        # PASSIVE: Sono 6 bit recessivi. Non corrompono il bus.
+                        # Per un osservatore esterno, questo NON è un errore di bus.
+                        # Ignoriamo l'incremento del REC.
+                        print(f"[{self.name}] Rilevato PASSIVE Error Flag -> Ignorato (REC resta {self.rec})")
+                
                 continue
 
             # ---------------------------------------------------------
-            # 2) RILEVAMENTO ATTACCO (Collisione sul mio ID - Per la Vittima)
+            # 2) RILEVAMENTO ATTACCO (Solo per chi subisce l'ID clash)
             # ---------------------------------------------------------
             if msg.arbitration_id == self.arb_id:
-                print(f"[{self.name}] CRITICO: Rilevato messaggio ostile (Attacco) con mio ID. Data={msg.data.hex()}")
+                print(f"[{self.name}] CRITICO: Rilevato messaggio ostile (Attacco) con mio ID.")
                 self.collision_event.set()
                 self._send_error_flag()
                 self._on_tx_error() 
                 continue
 
             # ---------------------------------------------------------
-            # 3) FRAME NORMALI E FILTRO ANTI-FALSI SUCCESSI (Per la Terza ECU)
+            # 3) FRAME NORMALI E FILTRO ANTI-FALSI SUCCESSI
             # ---------------------------------------------------------
             now = time.time()
             
-            # Controllo se è un duplicato ravvicinato (l'attacco che arriva subito dopo)
+            # Controllo duplicati ravvicinati (Collisione vista da fuori)
             is_collision_artifact = (
                 self.last_rx_id is not None and 
                 self.last_rx_id == msg.arbitration_id and 
-                (now - self.last_rx_time) < 0.02 # 20ms finestra temporale
+                (now - self.last_rx_time) < 0.02
             )
 
-            # Aggiorno memoria
             self.last_rx_id = msg.arbitration_id
             self.last_rx_time = now
 
             if is_collision_artifact:
-                # È la copia corrotta/doppia generata dall'attacco. 
-                # NON considerarlo successo, ma trattalo come errore (o rumore).
-                print(f"[{self.name}] Ignorato frame duplicato (Collisione) -> REC AUMENTA")
-                self._on_rx_error_flag() # REC +1
+                # Anche qui, se la vittima è passiva, tecnicamente il suo messaggio "perde"
+                # senza distruggere quello dell'attaccante. 
+                # Tuttavia, per semplicità, se vediamo due frame identici, contiamo errore 
+                # SOLO SE siamo ancora nella fase "caotica". 
+                # Ma grazie al fix sopra (Error Flag Passive ignorato), il REC smetterà di salire a dismisura.
+                print(f"[{self.name}] Frame duplicato (Collisione) -> REC +1")
+                self._on_rx_error_flag() 
             else:
-                # Messaggio pulito -> Successo
-                self._on_rx_success() # REC -1
+                # Messaggio valido -> REC SCENDE
+                self._on_rx_success() 
                 self._handle_normal_frame(msg)
 
     def _handle_normal_frame(self, msg: can.Message):
