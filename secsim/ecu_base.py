@@ -35,7 +35,6 @@ class ECU:
         period_sec: float,
         initial_tec: int = 0,
         initial_rec: int = 0,
-        self.tx_deadline = 0.0   # tempo entro cui mi aspetto un ERROR_FLAG
     ):
         self.name = name
         self.role = role
@@ -46,21 +45,26 @@ class ECU:
         self.tec = initial_tec
         self.rec = initial_rec
         self.state = NodeState.ERROR_ACTIVE
-        self._update_state() # Inizializza lo stato
+        self._update_state()  # Inizializza lo stato
 
         self.currently_transmitting = False
         self.last_tx_data = None
         self.last_tx_time = 0.0
+        self.tx_deadline = 0.0  # tempo entro cui mi aspetto un ERROR_FLAG  ← CORRETTO
 
-        # Configurazione SocketCAN (interface='socketcan')
-        self.bus = can.interface.Bus(channel=self.iface, interface="socketcan", receive_own_messages=False)
+        # Configurazione SocketCAN
+        self.bus = can.interface.Bus(
+            channel=self.iface,
+            interface="socketcan",
+            receive_own_messages=False
+        )
 
         # Thread TX/RX
         self._stop = False
         self.tx_thread = threading.Thread(target=self._tx_loop, daemon=True)
         self.rx_thread = threading.Thread(target=self._rx_loop, daemon=True)
-        
-        # Variabili specifiche per l'attacco (solo l'Attaccante le userà attivamente)
+
+        # Variabili specifiche per attacco (solo l'attaccante le usa)
         self.is_under_attack = threading.Event()
         self.attack_detected_time = 0.0
 
