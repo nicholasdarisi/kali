@@ -174,12 +174,12 @@ class ECU:
 
                     self.bus.send(msg)
                     print(f"[{self.name}] TX id=0x{self.arb_id:X} data={payload.hex().upper()} (state={self.state.name}, TEC={self.tec})")
+                    had_error = self._monitor_for_bit_error()
 
-                    # Dopo l'invio, supponiamo successo
-                    self._on_tx_success() 
-
-                    # Finestra di ascolto critica subito dopo l'invio (simula Bit Monitoring)
-                    self._monitor_for_bit_error()
+                    if had_error:
+                        self._on_tx_error()
+                    else:
+                        self._on_tx_success()
 
                 except can.CanError as e:
                     print(f"[{self.name}] Errore invio frame: {e}")
@@ -191,7 +191,7 @@ class ECU:
 
             time.sleep(0.02)
 
-    def _monitor_for_bit_error(self):
+    def _monitor_for_bit_error(self) -> bool:
         """
         Ascolta immediatamente dopo la TX per rilevare se l'Attaccante ha causato un Bit Error.
         Questa è la simulazione del Bit Monitoring fallito.
@@ -209,10 +209,11 @@ class ECU:
                 
                         # Simula la generazione immediata dell'Error Frame 
                         self._send_error_flag()
-                        self._on_tx_error()
+                        return True
         
         except can.CanError:
             pass # Ignora errori di lettura bus
+        return False
         
         
     def _rx_loop(self):
