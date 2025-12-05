@@ -155,7 +155,6 @@ class ECU:
         return bytes(random.randint(0, 255) for _ in range(8))
 
     def _tx_loop(self):
-        """Loop periodico di trasmissione (per ECU NORMAL/VICTIM)."""
         next_tx = time.time()
     
         while not self._stop:
@@ -166,6 +165,7 @@ class ECU:
     
             now = time.time()
             if self.period > 0 and now >= next_tx:
+    
                 payload = self._build_payload()
                 msg = can.Message(
                     arbitration_id=self.arb_id,
@@ -174,57 +174,24 @@ class ECU:
                 )
     
                 try:
-                    # Segno che sto trasmettendo
+                    # sto trasmettendo
                     self.currently_transmitting = True
                     self.last_tx_data = payload
                     self.last_tx_time = now
     
-                    # Finestra in cui mi aspetto un ERROR_FLAG (es. 20 ms)
+                    # finestra entro cui aspetto un ERROR_FLAG
                     self.tx_deadline = now + 0.02
     
                     self.bus.send(msg)
-                    print(f"[{self.name}] TX id=0x{self.arb_id:X} data={payload.hex().upper()} "
-                          f"(state={self.state.name}, TEC={self.tec})")
+                    print(f"[{self.name}] TX id=0x{self.arb_id:X} data={payload.hex().upper()} (TEC={self.tec})")
     
-                    # ⚠️ NIENTE recv qui, niente _monitor_for_bit_error e niente _on_tx_*:
-                    #   - il successo/errore viene deciso da _rx_loop
-                    #   - se arriva un ERROR_FLAG mentre sto trasmettendo → _on_tx_error()
-                    #   - se NON arriva nulla entro tx_deadline → _on_tx_success()
-    
-                except can.CanError as e:
-                    print(f"[{self.name}] Errore invio frame: {e}")
-                    # Errore driver → consideralo errore TX
+                except can.CanError:
                     self._on_tx_error()
                     self.currently_transmitting = False
     
                 next_tx += self.period
     
-            time.sleep(0.02)
-
-    def _monitor_for_bit_error(self) -> bool:
-        """
-        Ascolta immediatamente dopo la TX per rilevare se l'Attaccante ha causato un Bit Error.
-        Questa è la simulazione del Bit Monitoring fallito.
-        """
-        # Timeout molto stretto (10ms)
-        try:
-            # L'Attaccante invia un frame con il nostro ID subito dopo il nostro invio
-            attack_msg = self.bus.recv(timeout=0.01) 
-            
-            if attack_msg is not None and attack_msg.arbitration_id == self.arb_id:
-                    if attack_msg.data != self.last_tx_data:
-                        #Se un frame con il MIO ID è arrivato subito dopo il mio TX, 
-                        # l'Attaccante ha causato un conflitto Bit Error.
-                        print(f"[{self.name}] Rilevato messaggio in conflitto subito dopo TX.")
-                
-                        # Simula la generazione immediata dell'Error Frame 
-                        self._send_error_flag()
-                        return True
-        
-        except can.CanError:
-            pass # Ignora errori di lettura bus
-        return False
-        
+            time.sleep(0.01)
         
     def _rx_loop(self):
         """Loop di ricezione unico: gestisce ERROR_FLAG, bit error e RX normale."""
