@@ -35,6 +35,7 @@ class ECU:
         period_sec: float,
         initial_tec: int = 0,
         initial_rec: int = 0,
+        self.tx_deadline = 0.0   # tempo entro cui mi aspetto un ERROR_FLAG
     ):
         self.name = name
         self.role = role
@@ -150,46 +151,51 @@ class ECU:
         return bytes(random.randint(0, 255) for _ in range(8))
 
     def _tx_loop(self):
-        """Loop periodico di trasmissione (per ECU NORMAL)."""
-        next_tx = time.time()
+    """Loop periodico di trasmissione (per ECU NORMAL/VICTIM)."""
+    next_tx = time.time()
 
-        while not self._stop:
-            if self.state == NodeState.BUS_OFF:
-                print(f"[{self.name}] BUS OFF: Impossibile trasmettere. TEC={self.tec}")
-                time.sleep(1.0)
-                continue
+    while not self._stop:
+        if self.state == NodeState.BUS_OFF:
+            print(f"[{self.name}] BUS OFF: Impossibile trasmettere. TEC={self.tec}")
+            time.sleep(1.0)
+            continue
 
-            now = time.time()
-            if self.period > 0 and now >= next_tx:
-                payload = self._build_payload()
-                msg = can.Message(
-                    arbitration_id=self.arb_id,
-                    data=payload,
-                    is_extended_id=False,
-                )
-                try:
-                    self.currently_transmitting = True
-                    self.last_tx_data = payload
-                    self.last_tx_time = now
+        now = time.time()
+        if self.period > 0 and now >= next_tx:
+            payload = self._build_payload()
+            msg = can.Message(
+                arbitration_id=self.arb_id,
+                data=payload,
+                is_extended_id=False,
+            )
 
-                    self.bus.send(msg)
-                    print(f"[{self.name}] TX id=0x{self.arb_id:X} data={payload.hex().upper()} (state={self.state.name}, TEC={self.tec})")
-                    had_error = self._monitor_for_bit_error()
+            try:
+                # Segno che sto trasmettendo
+                self.currently_transmitting = True
+                self.last_tx_data = payload
+                self.last_tx_time = now
 
-                    if had_error:
-                        self._on_tx_error()
-                    else:
-                        self._on_tx_success()
+                # Finestra in cui mi aspetto un ERROR_FLAG (es. 20 ms)
+                self.tx_deadline = now + 0.02
 
-                except can.CanError as e:
-                    print(f"[{self.name}] Errore invio frame: {e}")
+                self.bus.send(msg)
+                print(f"[{self.name}] TX id=0x{self.arb_id:X} data={payload.hex().upper()} "
+                      f"(state={self.state.name}, TEC={self.tec})")
 
-                finally:
-                    self.currently_transmitting = False
+                # ⚠️ NIENTE recv qui, niente _monitor_for_bit_error e niente _on_tx_*:
+                #   - il successo/errore viene deciso da _rx_loop
+                #   - se arriva un ERROR_FLAG mentre sto trasmettendo → _on_tx_error()
+                #   - se NON arriva nulla entro tx_deadline → _on_tx_success()
 
-                next_tx += self.period
+            except can.CanError as e:
+                print(f"[{self.name}] Errore invio frame: {e}")
+                # Errore driver → consideralo errore TX
+                self._on_tx_error()
+                self.currently_transmitting = False
 
-            time.sleep(0.02)
+            next_tx += self.period
+
+        time.sleep(0.02)
 
     def _monitor_for_bit_error(self) -> bool:
         """
@@ -217,36 +223,62 @@ class ECU:
         
         
     def _rx_loop(self):
-        """Loop di ricezione e gestione degli Error Flags."""
-        while not self._stop:
-            try:
-                msg = self.bus.recv(timeout=0.1)
-            except can.CanError as e:
-                print(f"[{self.name}] Errore recv: {e}")
-                continue
+    """Loop di ricezione unico: gestisce ERROR_FLAG, bit error e RX normale."""
+    while not self._stop:
+        # 1) Gestione di TX in sospeso senza error frame → successo
+        if self.currently_transmitting and time.time() > self.tx_deadline:
+            # Non ho visto ERROR_FLAG entro la finestra → TX OK
+            self._on_tx_success()
+            print(f"[{self.name}] TX considerato SUCCESSO (no ERROR_FLAG entro deadline). TEC={self.tec}")
+            self.currently_transmitting = False
 
-            if msg is None:
-                continue
+        try:
+            msg = self.bus.recv(timeout=0.05)
+        except can.CanError as e:
+            print(f"[{self.name}] Errore recv: {e}")
+            continue
 
-            # 1) Error frame simulato (Qualcuno ha rilevato un errore)
-            if msg.arbitration_id == ERROR_FLAG_ID:
-                flag_type = ErrorFlagType(msg.data[0]) if msg.data and msg.data[0] in (0, 1) else ErrorFlagType.ACTIVE
+        if msg is None:
+            continue
 
-                if self.currently_transmitting:
-                    # Rilevato il proprio errore
-                    self._on_tx_error()
-                    print(f"[{self.name}] Rilevato ERROR_FLAG {flag_type.name} mentre trasmette → TEC={self.tec}, state={self.state.name}")
-                    self._send_error_flag() # Risponde con il proprio Error Flag
+        # 2) ERROR FLAG (qualcuno ha segnalato un errore)
+        if msg.arbitration_id == ERROR_FLAG_ID:
+            flag_type = (
+                ErrorFlagType(msg.data[0])
+                if msg.data and msg.data[0] in (0, 1)
+                else ErrorFlagType.ACTIVE
+            )
 
-                else:
-                    # Rilevato l'errore di qualcun altro
-                    self._on_rx_error_flag()
-                    print(f"[{self.name}] Rilevato ERROR_FLAG {flag_type.name} da RX → REC={self.rec}, state={self.state.name}")
-                continue
+            if self.currently_transmitting:
+                # Ho rilevato un ERROR_FLAG mentre stavo trasmettendo → mio errore TX
+                self._on_tx_error()
+                self.currently_transmitting = False
+                print(f"[{self.name}] Rilevato ERROR_FLAG {flag_type.name} mentre trasmette "
+                      f"→ TEC={self.tec}, state={self.state.name}")
+            else:
+                # Sto solo ascoltando → errore di qualcun altro → REC++
+                self._on_rx_error_flag()
+                print(f"[{self.name}] Rilevato ERROR_FLAG {flag_type.name} da RX "
+                      f"→ REC={self.rec}, state={self.state.name}")
+            continue
 
-            # 2) Frame normali (RX successo)
-            self._on_rx_success()
-            self._handle_normal_frame(msg)
+        # 3) Bit error “alla Owen”: vedo un frame con il MIO ID ma dati diversi subito dopo il mio TX
+        if (
+            self.currently_transmitting
+            and msg.arbitration_id == self.arb_id
+            and msg.data != self.last_tx_data
+        ):
+            # Questo è il frame corrotto dell'attaccante
+            print(f"[{self.name}] BIT ERROR: RX frame in conflitto con il mio TX.")
+            # In CAN reale qui genererei i 6 bit dominanti → simuliamo con ERROR_FLAG
+            self._send_error_flag()
+            # _rx_loop vedrà poi l'ERROR_FLAG e chiamerà _on_tx_error()
+            # quindi qui NON chiamiamo _on_tx_error() per evitare doppio incremento.
+            continue
+
+        # 4) Frame normale → RX successo (REC-- se >0)
+        self._on_rx_success()
+        self._handle_normal_frame(msg)
 
     def _handle_normal_frame(self, msg: can.Message):
         """Hook per la logica specifica del ruolo (Attacker)."""
