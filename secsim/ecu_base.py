@@ -9,21 +9,25 @@ from enum import Enum, auto
 # --- Definizione Stati e Ruoli ---
 
 class NodeState(Enum):
-    ERROR_ACTIVE = auto()  # TEC/REC <= 127
-    ERROR_PASSIVE = auto() # TEC/REC >= 128
-    BUS_OFF = auto()       # TEC >= 256
+    ERROR_ACTIVE = auto()   # TEC/REC <= 127
+    ERROR_PASSIVE = auto()  # TEC/REC >= 128
+    BUS_OFF = auto()        # TEC >= 256
 
 class Role(Enum):
-    NORMAL = auto()   # ecu normale / vittima
-    ATTACKER = auto() # ecu attaccante 
+    NORMAL = auto()    # ECU normale / vittima
+    ATTACKER = auto()  # ECU attaccante
 
-# ID speciale e type per simulare l'Error Frame sul bus
+# ID speciale per simulare gli Error Flag sul bus
 ERROR_FLAG_ID = 0x7E0
-class ErrorFlagType(Enum):
-    ACTIVE = 0  # 6 bit Dominanti
-    PASSIVE = 1 # 6 bit Recessivi (Invisibili sul bus fisico, ma logici qui)
 
-# --- Classe Base ECU ---
+class ErrorFlagType(Enum):
+    ACTIVE = 0   # 6 bit dominanti
+    PASSIVE = 1  # 6 bit recessivi
+
+
+# ======================================================================
+#                               ECU BASE
+# ======================================================================
 
 class ECU:
     def __init__(
@@ -42,34 +46,38 @@ class ECU:
         self.arb_id = arbitration_id
         self.period = period_sec
 
+        # Contatori errore
         self.tec = initial_tec
         self.rec = initial_rec
         self.state = NodeState.ERROR_ACTIVE
-        self._update_state() # Inizializza lo stato
+        self._update_state()
 
-        # NUOVO: Flag per gestire la logica +8 -1 in Error Passive
-        self.pending_passive_success = False
-
+        # Stato TX/RX
         self.currently_transmitting = False
         self.last_tx_data = None
         self.last_tx_time = 0.0
+
+        # Stato RX per gestione REC “corretto”
         self.last_rx_id = None
         self.last_rx_time = 0.0
         self.last_rx_decremented = False
 
-        # Configurazione SocketCAN (interface='socketcan')
-        self.bus = can.interface.Bus(channel=self.iface, interface="socketcan", receive_own_messages=False)
+        # SocketCAN
+        self.bus = can.interface.Bus(
+            channel=self.iface,
+            interface="socketcan",
+            receive_own_messages=False,
+        )
 
-        # Thread TX/RX
+        # Thread
         self._stop = False
         self.collision_event = threading.Event()
         self.tx_thread = threading.Thread(target=self._tx_loop, daemon=True)
         self.rx_thread = threading.Thread(target=self._rx_loop, daemon=True)
-        
-        # Variabili specifiche per l'attacco
+
+        # Flag che userai solo se ti serve in estensioni future
         self.is_under_attack = threading.Event()
         self.attack_detected_time = 0.0
-
 
     # -----------------------------------------------------
     # --- GESTIONE TEC/REC e STATI D'ERRORE ---
@@ -85,65 +93,64 @@ class ECU:
             self.state = NodeState.ERROR_ACTIVE
 
     def _on_tx_success(self):
-        """TEC diminuisce di 1 per trasmissione OK."""
+        """Trasmissione terminata correttamente → TEC diminuisce di 1."""
         if self.tec > 0:
             self.tec -= 1
         self._update_state()
 
     def _on_tx_error(self):
         """
-        Chiamato quando il nodo rileva un errore durante la sua trasmissione (TEC++).
-        REGOLA ISO/Slide: L'errore incrementa SEMPRE il TEC di 8 all'istante.
-        Se siamo in Error Passive, il recupero (-1) avverrà alla ricezione del frame successivo.
+        Errore durante la *mia* trasmissione → TEC aumenta di 8.
+
+        NOTA: qui NON facciamo +7 in error-passive.
+        Il +7 della vittima in fase 2 viene fuori come:
+            _on_tx_error()  →  TEC + 8
+            _on_tx_success() → TEC - 1
+        chiamati in sequenza quando il nodo è in ERROR_PASSIVE.
         """
         self.tec += 8
-        
-        if self.state == NodeState.ERROR_PASSIVE:
-            # Siamo Passive: il nostro error flag è recessivo (invisibile).
-            # Se l'attaccante continua a trasmettere e finisce il frame,
-            # noi lo riceveremo correttamente. Quello conterà come "Successo" (-1).
-            self.pending_passive_success = True
-            print(f"[{self.name}] Error Passive: TEC +8 (Tot={self.tec}). Attesa frame valido per correzione -1...")
-        else:
-            # Siamo Active: distruggiamo il bus. Nessun frame valido passerà ora.
-            self.pending_passive_success = False
-            
         self._update_state()
 
     def _on_rx_error_flag(self):
         """
-        Chiamato quando il nodo riceve un Error Frame (non stava trasmettendo).
-        REGOLA: REC aumenta di 1.
+        Ho ricevuto un Error Flag mentre stavo solo ascoltando.
+        REC aumenta di 1.
         """
         self.rec += 1
         self._update_state()
 
     def _on_rx_success(self):
         """
-        Chiamato quando il nodo riceve una trasmissione intera e CORRETTA.
-        REGOLA: REC diminuisce di 1.
+        Ho ricevuto un frame valido e completo.
+        REC diminuisce di 1 (se > 0).
+        (Questa funzione è usata solo nella versione “semplice”;
+         in questo file usiamo una variante esplicita dentro _rx_loop.)
         """
         if self.rec > 0:
             self.rec -= 1
         self._update_state()
 
     # -----------------------------------------------------
-    # --- GESTIONE ERROR FRAME (Risposta) ---
+    # --- GESTIONE ERROR FRAME (INVIO) ---
     # -----------------------------------------------------
 
     def _send_error_flag(self):
         """
-        Invia la bandiera di errore appropriata allo stato corrente.
+        Invia sul bus un Error Flag coerente con lo stato attuale.
+        ERROR_ACTIVE  → 6 bit dominanti (ACTIVE)
+        ERROR_PASSIVE → 6 bit recessivi (PASSIVE)
+        BUS_OFF       → nessun flag.
         """
         if self.state == NodeState.ERROR_ACTIVE:
             flag_type = ErrorFlagType.ACTIVE
         elif self.state == NodeState.ERROR_PASSIVE:
             flag_type = ErrorFlagType.PASSIVE
-        else: # Bus Off
-            return 
-        
+        else:
+            # BUS_OFF: non partecipa al traffico
+            return
+
         data = bytearray(8)
-        data[0] = flag_type.value 
+        data[0] = flag_type.value
         msg = can.Message(
             arbitration_id=ERROR_FLAG_ID,
             data=data,
@@ -151,10 +158,12 @@ class ECU:
         )
         try:
             self.bus.send(msg)
-            print(f"[{self.name}] --> ERROR_FLAG {flag_type.name} (TEC={self.tec}, REC={self.rec}, state={self.state.name})")
+            print(
+                f"[{self.name}] --> ERROR_FLAG {flag_type.name} "
+                f"(TEC={self.tec}, REC={self.rec}, state={self.state.name})"
+            )
         except can.CanError as e:
             print(f"[{self.name}] Errore nell'invio error flag: {e}")
-
 
     # -----------------------------------------------------
     # --- LOOPS E COMUNICAZIONE ---
@@ -164,16 +173,18 @@ class ECU:
         """Payload generico (8 byte random)."""
         return bytes(random.randint(0, 255) for _ in range(8))
 
+    # -------------------- TX LOOP -------------------- #
+
     def _tx_loop(self):
-        """Loop periodico di trasmissione (per ECU NORMAL / vittima)."""
+        """Loop periodico di trasmissione (per ECU NORMAL/VITTIMA)."""
         next_tx = time.time()
-    
+
         while not self._stop:
             if self.state == NodeState.BUS_OFF:
                 print(f"[{self.name}] BUS OFF: Impossibile trasmettere. TEC={self.tec}")
                 time.sleep(1.0)
                 continue
-    
+
             now = time.time()
             if self.period > 0 and now >= next_tx:
                 payload = self._build_payload()
@@ -182,42 +193,46 @@ class ECU:
                     data=payload,
                     is_extended_id=False,
                 )
+
                 try:
                     self.currently_transmitting = True
                     self.last_tx_data = payload
                     self.last_tx_time = now
-                    
-                    # RESETTO l'evento di collisione prima di iniziare a trasmettere
+
+                    # Reset dell’evento collisione prima dell’invio
                     self.collision_event.clear()
-    
+
                     self.bus.send(msg)
-                    print(f"[{self.name}] TX id=0x{self.arb_id:X} data={payload.hex().upper()} "
-                          f"(state={self.state.name}, TEC={self.tec})")
-    
-                    # --- SINCRONIZZAZIONE ---
-                    # Aspetto un segnale di collisione o timeout
+                    print(
+                        f"[{self.name}] TX id=0x{self.arb_id:X} "
+                        f"data={payload.hex().upper()} "
+                        f"(state={self.state.name}, TEC={self.tec})"
+                    )
+
+                    # Attendo un eventuale errore segnalato da _rx_loop.
                     collision_occurred = self.collision_event.wait(timeout=0.1)
-                    
+
                     if collision_occurred:
-                        # RX Loop ha rilevato il problema e ha già chiamato _on_tx_error()
-                        print(f"[{self.name}] TX fallita -> Collisione confermata dal RX loop.")
+                        # _rx_loop ha già chiamato _on_tx_error()
+                        print(f"[{self.name}] TX fallita → collisione confermata dal RX loop.")
                     else:
-                        # Nessuna notizia = Buona notizia. 
+                        # Nessun errore visto nel tempo di attesa → TX OK
                         self._on_tx_success()
-    
+
                 except can.CanError as e:
                     print(f"[{self.name}] Errore invio frame (Driver): {e}")
                     self._on_tx_error()
-    
+
                 finally:
                     self.currently_transmitting = False
                     next_tx += self.period
-    
+
             time.sleep(0.02)
-        
-        
+
+    # -------------------- RX LOOP -------------------- #
+
     def _rx_loop(self):
-        """Loop di ricezione e gestione degli Error Flags e Collisioni."""
+        """Loop di ricezione: gestisce ERROR_FLAG, collisioni e RX normali."""
         while not self._stop:
             try:
                 msg = self.bus.recv(timeout=0.1)
@@ -228,84 +243,111 @@ class ECU:
                 continue
 
             # ---------------------------------------------------------
-            # 1) GESTIONE ERROR FRAME (Con logica Passive/Active)
+            # 1) GESTIONE ERROR FLAG RICEVUTI
             # ---------------------------------------------------------
             if msg.arbitration_id == ERROR_FLAG_ID:
-                flag_type = ErrorFlagType(msg.data[0]) if msg.data and msg.data[0] in (0, 1) else ErrorFlagType.ACTIVE
+                flag_type = (
+                    ErrorFlagType(msg.data[0])
+                    if msg.data and msg.data[0] in (0, 1)
+                    else ErrorFlagType.ACTIVE
+                )
 
                 if self.currently_transmitting:
-                    # Logica trasmettitore: la mia trasmissione è stata distrutta o corrotta
-                    self._on_tx_error()
-                    self._send_error_flag()
+                    # ERRORE sulla MIA trasmissione (qualcun altro ha visto errore).
+                    was_passive = (self.state == NodeState.ERROR_PASSIVE)
+
+                    self._on_tx_error()           # TEC +8
+                    if was_passive:
+                        # Il mio passive error flag viene trasmesso correttamente
+                        # → simuliamo TEC -1 (netto +7).
+                        self._on_tx_success()
+
+                    # Sblocco il TX loop
                     self.collision_event.set()
+
+                    print(
+                        f"[{self.name}] Rilevato ERROR_FLAG {flag_type.name} mentre trasmette "
+                        f"→ TEC={self.tec}, state={self.state.name}"
+                    )
                 else:
-                    # Logica Osservatore
+                    # Sono un osservatore: vedo un errore di qualcun altro
                     if flag_type == ErrorFlagType.ACTIVE:
-                        self._on_rx_error_flag() 
-                        print(f"[{self.name}] ACTIVE Error Flag -> REC +1 (Tot: {self.rec})")
+                        # Active error flag → errore reale sul bus → REC++
+                        self._on_rx_error_flag()
+                        print(
+                            f"[{self.name}] ACTIVE Error Flag → REC +1 (Tot: {self.rec})"
+                        )
                     else:
+                        # Passive error flag → correzione del “falso errore” precedente
                         if self.rec > 0:
                             self.rec -= 1
-                        print(f"[{self.name}] PASSIVE Error Flag -> Compensazione (REC scende a {self.rec})")
+                            self._update_state()
+                        print(
+                            f"[{self.name}] PASSIVE Error Flag → compensazione REC → {self.rec}"
+                        )
                 continue
 
             # ---------------------------------------------------------
-            # 2) RILEVAMENTO ATTACCO (ID MIO)
+            # 2) BIT ERROR ALLA CHO-SHIN: frame con MIO ID mentre TX
+            #    (collisione con attaccante, C1–C3)
             # ---------------------------------------------------------
-            if msg.arbitration_id == self.arb_id:
-                # Sto ricevendo il MIO stesso ID mentre trasmetto (o avrei dovuto trasmettere)
-                self.collision_event.set()
+            if self.currently_transmitting and msg.arbitration_id == self.arb_id:
+                # Qui puoi anche controllare msg.data != self.last_tx_data se vuoi
+                # simulare esplicitamente il bit-flip.
+                was_passive = (self.state == NodeState.ERROR_PASSIVE)
+
+                print(f"[{self.name}] BIT ERROR: frame con mio ID durante TX.")
+                # Genero il mio error flag (active/passive a seconda dello stato attuale)
                 self._send_error_flag()
+
+                # TEC +8 per errore TX
                 self._on_tx_error()
+
+                # Se ero già in error-passive, simulo il passive error flag riuscito → TEC -1
+                if was_passive:
+                    self._on_tx_success()
+
+                # Segnalo collisione al TX loop
+                self.collision_event.set()
                 continue
 
             # ---------------------------------------------------------
-            # 3) FRAME NORMALI 
+            # 3) FRAME NORMALI (RX riuscito)
             # ---------------------------------------------------------
             now = time.time()
-            
+
             is_collision_artifact = (
-                self.last_rx_id is not None and 
-                self.last_rx_id == msg.arbitration_id and 
-                (now - self.last_rx_time) < 0.02
+                self.last_rx_id is not None
+                and self.last_rx_id == msg.arbitration_id
+                and (now - self.last_rx_time) < 0.02
             )
 
             self.last_rx_id = msg.arbitration_id
             self.last_rx_time = now
 
             if is_collision_artifact:
-                # FIX PROBLEMA 1: Se è un artefatto, annullo l'eventuale -1 fatto per errore prima
+                # Secondo frame "duplicato" dopo collisione:
+                # annullo il decremento di REC fatto sul primo.
                 if self.last_rx_decremented:
-                    self._on_rx_error_flag() 
-                    print(f"[{self.name}] Collisione -> REC ripristinato (aveva decrementato)")
+                    self._on_rx_error_flag()  # REC +1 → annulla il -1 precedente
+                    print(f"[{self.name}] Collisione → REC ripristinato (aveva decrementato).")
                 else:
-                    print(f"[{self.name}] Collisione -> REC invariato (era già a 0)")
-                
-                self.last_rx_decremented = False 
+                    print(f"[{self.name}] Collisione → REC invariato (era già 0).")
 
+                self.last_rx_decremented = False
             else:
-                # --- AUTOMAZIONE ERROR PASSIVE (+8 -1) ---
-                # Se questo nodo è in Error Passive, ha generato un errore (+8) 
-                # ma vede ora passare un frame valido (es. dell'attaccante), 
-                # applica il -1 come da specifiche del protocollo.
-                if self.pending_passive_success:
-                    if self.tec > 0:
-                        self.tec -= 1
-                        print(f"[{self.name}] AUTOMAZIONE: Frame valido ricevuto in Passive -> TEC -1 (Tot: {self.tec})")
-                    self.pending_passive_success = False
-
-                # --- LOGICA SUCCESSO STANDARD (REC) ---
+                # Frame normale, nessuna collisione → RX successo
                 if self.rec > 0:
                     self.rec -= 1
                     self.last_rx_decremented = True
                 else:
                     self.last_rx_decremented = False
-                
+
                 self._update_state()
                 self._handle_normal_frame(msg)
 
+    # Hook da overridare in AttackerECU / ECU normali custom
     def _handle_normal_frame(self, msg: can.Message):
-        """Hook per la logica specifica del ruolo (Attacker)."""
         pass
 
     # ------------- API pubbliche ------------- #
@@ -320,4 +362,7 @@ class ECU:
         self.tx_thread.join(timeout=1.0)
         self.rx_thread.join(timeout=1.0)
         self.bus.shutdown()
-        print(f"[{self.name}] Arrestata. TEC={self.tec}, REC={self.rec}, state={self.state.name}")
+        print(
+            f"[{self.name}] Arrestata. TEC={self.tec}, REC={self.rec}, "
+            f"state={self.state.name}"
+        )
