@@ -14,14 +14,14 @@ class NodeState(Enum):
     BUS_OFF = auto()       # TEC >= 256
 
 class Role(Enum):
-    NORMAL = auto() #ecu normale
+    NORMAL = auto()   # ecu normale / vittima
     ATTACKER = auto() # ecu attaccante 
 
 # ID speciale e type per simulare l'Error Frame sul bus
 ERROR_FLAG_ID = 0x7E0
 class ErrorFlagType(Enum):
     ACTIVE = 0  # 6 bit Dominanti
-    PASSIVE = 1 # 6 bit Recessivi
+    PASSIVE = 1 # 6 bit Recessivi (Invisibili sul bus fisico, ma logici qui)
 
 # --- Classe Base ECU ---
 
@@ -47,6 +47,9 @@ class ECU:
         self.state = NodeState.ERROR_ACTIVE
         self._update_state() # Inizializza lo stato
 
+        # NUOVO: Flag per gestire la logica +8 -1 in Error Passive
+        self.pending_passive_success = False
+
         self.currently_transmitting = False
         self.last_tx_data = None
         self.last_tx_time = 0.0
@@ -63,7 +66,7 @@ class ECU:
         self.tx_thread = threading.Thread(target=self._tx_loop, daemon=True)
         self.rx_thread = threading.Thread(target=self._rx_loop, daemon=True)
         
-        # Variabili specifiche per l'attacco (solo l'Attaccante le userà attivamente)
+        # Variabili specifiche per l'attacco
         self.is_under_attack = threading.Event()
         self.attack_detected_time = 0.0
 
@@ -90,13 +93,21 @@ class ECU:
     def _on_tx_error(self):
         """
         Chiamato quando il nodo rileva un errore durante la sua trasmissione (TEC++).
-        TEC aumenta di 8, ma 7 se è in ERROR_PASSIVE (come da specifiche del modello).
+        REGOLA ISO/Slide: L'errore incrementa SEMPRE il TEC di 8 all'istante.
+        Se siamo in Error Passive, il recupero (-1) avverrà alla ricezione del frame successivo.
         """
-        if self.state == NodeState.ERROR_ACTIVE:
-            self.tec += 8
-        elif self.state == NodeState.ERROR_PASSIVE:
-            # Qui usiamo +7 per la Vittima/Normale, che è il modello di attacco (8 - 1).
-            self.tec += 7 
+        self.tec += 8
+        
+        if self.state == NodeState.ERROR_PASSIVE:
+            # Siamo Passive: il nostro error flag è recessivo (invisibile).
+            # Se l'attaccante continua a trasmettere e finisce il frame,
+            # noi lo riceveremo correttamente. Quello conterà come "Successo" (-1).
+            self.pending_passive_success = True
+            print(f"[{self.name}] Error Passive: TEC +8 (Tot={self.tec}). Attesa frame valido per correzione -1...")
+        else:
+            # Siamo Active: distruggiamo il bus. Nessun frame valido passerà ora.
+            self.pending_passive_success = False
+            
         self._update_state()
 
     def _on_rx_error_flag(self):
@@ -184,16 +195,14 @@ class ECU:
                           f"(state={self.state.name}, TEC={self.tec})")
     
                     # --- SINCRONIZZAZIONE ---
-                    # Invece di leggere dal bus (che lo fa già rx_loop), aspetto un segnale.
-                    # Se l'RX loop vede un attacco o un Error Flag entro 0.1s, sblocca questo wait.
-                    
+                    # Aspetto un segnale di collisione o timeout
                     collision_occurred = self.collision_event.wait(timeout=0.1)
                     
                     if collision_occurred:
                         # RX Loop ha rilevato il problema e ha già chiamato _on_tx_error()
                         print(f"[{self.name}] TX fallita -> Collisione confermata dal RX loop.")
                     else:
-                        # Nessuna notizia = Buona notizia. Nessun attacco rilevato nel timeout.
+                        # Nessuna notizia = Buona notizia. 
                         self._on_tx_success()
     
                 except can.CanError as e:
@@ -225,19 +234,16 @@ class ECU:
                 flag_type = ErrorFlagType(msg.data[0]) if msg.data and msg.data[0] in (0, 1) else ErrorFlagType.ACTIVE
 
                 if self.currently_transmitting:
-                    # Logica trasmettitore
+                    # Logica trasmettitore: la mia trasmissione è stata distrutta o corrotta
                     self._on_tx_error()
                     self._send_error_flag()
                     self.collision_event.set()
                 else:
-                    # Logica Osservatore (Terza ECU)
+                    # Logica Osservatore
                     if flag_type == ErrorFlagType.ACTIVE:
-                        # ACTIVE -> Errore vero -> REC AUMENTA
                         self._on_rx_error_flag() 
                         print(f"[{self.name}] ACTIVE Error Flag -> REC +1 (Tot: {self.rec})")
                     else:
-                        # PASSIVE -> Il bus funziona, ma noi avevamo contato un errore per il duplicato.
-                        # Dobbiamo annullare quell'errore per far scendere il REC.
                         if self.rec > 0:
                             self.rec -= 1
                         print(f"[{self.name}] PASSIVE Error Flag -> Compensazione (REC scende a {self.rec})")
@@ -247,6 +253,7 @@ class ECU:
             # 2) RILEVAMENTO ATTACCO (ID MIO)
             # ---------------------------------------------------------
             if msg.arbitration_id == self.arb_id:
+                # Sto ricevendo il MIO stesso ID mentre trasmetto (o avrei dovuto trasmettere)
                 self.collision_event.set()
                 self._send_error_flag()
                 self._on_tx_error()
@@ -267,28 +274,32 @@ class ECU:
             self.last_rx_time = now
 
             if is_collision_artifact:
-                # --- FIX PROBLEMA 1 (REC parte da 0) ---
-                # Aumento il REC per annullare il successo precedente, 
-                # MA SOLO SE il successo precedente aveva davvero abbassato il REC.
-                # Se eravamo a 0 ed siamo rimasti a 0, non dobbiamo salire a 1 qui.
+                # FIX PROBLEMA 1: Se è un artefatto, annullo l'eventuale -1 fatto per errore prima
                 if self.last_rx_decremented:
-                    self._on_rx_error_flag() # REC +1 (Annulla il -1 precedente)
+                    self._on_rx_error_flag() 
                     print(f"[{self.name}] Collisione -> REC ripristinato (aveva decrementato)")
                 else:
                     print(f"[{self.name}] Collisione -> REC invariato (era già a 0)")
                 
-                # Resettiamo il flag per il prossimo giro
                 self.last_rx_decremented = False 
 
             else:
-                # --- LOGICA SUCCESSO STANDARD ---
-                # Eseguo manualmente _on_rx_success per tracciare se decrementa davvero
+                # --- AUTOMAZIONE ERROR PASSIVE (+8 -1) ---
+                # Se questo nodo è in Error Passive, ha generato un errore (+8) 
+                # ma vede ora passare un frame valido (es. dell'attaccante), 
+                # applica il -1 come da specifiche del protocollo.
+                if self.pending_passive_success:
+                    if self.tec > 0:
+                        self.tec -= 1
+                        print(f"[{self.name}] AUTOMAZIONE: Frame valido ricevuto in Passive -> TEC -1 (Tot: {self.tec})")
+                    self.pending_passive_success = False
+
+                # --- LOGICA SUCCESSO STANDARD (REC) ---
                 if self.rec > 0:
                     self.rec -= 1
-                    self.last_rx_decremented = True # Ho tolto 1
+                    self.last_rx_decremented = True
                 else:
-                    # REC era 0, è rimasto 0
-                    self.last_rx_decremented = False # Non ho tolto nulla
+                    self.last_rx_decremented = False
                 
                 self._update_state()
                 self._handle_normal_frame(msg)
