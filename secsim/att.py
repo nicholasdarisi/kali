@@ -51,68 +51,83 @@ class AttackerECU(ECU):
             self._handle_normal_frame(msg)
 
     def _handle_normal_frame(self, msg: can.Message):
-        """
-        L'Attaccante sniffa il bus e risponde solo al frame della Vittima.
-        Attacco: forza r0 (bit 5) a 0 nel primo byte del payload.
-        """
-        if msg.arbitration_id != self.victim_id:
-            return
+    """
+    L'Attaccante sniffa il bus e risponde solo al frame della Vittima.
 
-        # Costruiamo il payload corrotto: stesso frame, ma r0=0
-        modified_data = bytearray(msg.data)
-        if len(modified_data) > 0:
-            modified_data[0] = force_r0_to_zero(modified_data[0])
+    - Stesso arbitration_id della vittima
+    - Stessi RTR, IDE, DLC
+    - r0 forzato a 0
+    - payload dati (byte 1..7) diverso da quello della vittima
+    """
+    if msg.arbitration_id != self.victim_id:
+        # Ignora tutti i messaggi che non sono il bersaglio
+        return
 
-        att_msg = can.Message(
-            arbitration_id=self.victim_id,  # stesso ID della vittima
-            data=modified_data,
-            is_extended_id=msg.is_extended_id,
+    if len(msg.data) < 1:
+        # Niente da fare se il frame è vuoto (non dovrebbe succedere nel tuo modello)
+        return
+
+    # --- 1. Decodifica header della vittima (RTR, IDE, r0, DLC) ---
+    victim_ctrl = msg.data[0]
+    rtr = (victim_ctrl >> 7) & 0x01
+    ide = (victim_ctrl >> 6) & 0x01
+    dlc = victim_ctrl & 0x0F  # 4 bit di DLC
+
+    # --- 2. Costruisci header dell'attaccante con r0 = 0 ---
+    # bit7 = RTR, bit6 = IDE, bit5 = r0 (forzato a 0), bit[3:0] = DLC
+    attacker_ctrl = (rtr << 7) | (ide << 6) | (0 << 5) | (dlc & 0x0F)
+
+    attacker_data = bytearray(8)
+    attacker_data[0] = attacker_ctrl
+
+    # --- 3. Genera un payload applicativo diverso dalla vittima ---
+    # byte 1..7: valori random, ma cerco di evitare di copiare pari pari i byte della vittima
+    for i in range(1, 8):
+        v_byte = msg.data[i] if i < len(msg.data) else 0
+        # genera un byte random finché non è uguale a quello della vittima
+        b = random.randint(0, 255)
+        if b == v_byte:
+            b = (b + 1) & 0xFF
+        attacker_data[i] = b
+
+    att_msg = can.Message(
+        arbitration_id=self.victim_id,     # Stesso ID per garantire la collisione
+        data=attacker_data,
+        is_extended_id=msg.is_extended_id
+    )
+
+    try:
+        self.currently_transmitting = True
+        self.last_tx_data = bytes(attacker_data)
+        self.last_tx_time = time.time()
+
+        self.bus.send(att_msg)
+        print(
+            f"[{self.name}] ATTACK: "
+            f"TX_V={msg.data.hex().upper()} → TX_A={att_msg.data.hex().upper()}"
         )
 
-        try:
-            self.currently_transmitting = True
-            self.last_tx_data = bytes(modified_data)
-            self.last_tx_time = time.time()
+        error_detected = False
+        response_msg = self.bus.recv(timeout=0.05)
 
-            # Invio del frame corrotto subito dopo aver sniffato quello della vittima
-            self.bus.send(att_msg)
-            print(
-                f"[{self.name}] ATTACK: TX_V={msg.data.hex().upper()} "
-                f"→ TX_A={att_msg.data.hex().upper()} (r0 bit forced to 0)"
-            )
+        if response_msg is not None and response_msg.arbitration_id == ERROR_FLAG_ID:
+            flag_type = ErrorFlagType(response_msg.data[0]) \
+                        if response_msg.data and response_msg.data[0] in (0, 1) \
+                        else ErrorFlagType.ACTIVE
+            if flag_type == ErrorFlagType.ACTIVE:
+                self._on_tx_error()   # TEC +8
+                error_detected = True
+                print(f"[{self.name}] att → TEC +8: Rilevato ERROR FLAG ACTIVE della Vittima.")
 
-            # Finestra corta in cui guardo se qualcuno genera un ERROR_FLAG
-            error_detected = False
-            response_msg = self.bus.recv(timeout=0.05)
+        if not error_detected:
+            # Nessun ERROR_FLAG ACTIVE visto → TX considerato OK
+            self._on_tx_success()    # TEC -1
+            print(f"[{self.name}] att → TEC -1: (TX successo).")
 
-            if (
-                response_msg is not None
-                and response_msg.arbitration_id == ERROR_FLAG_ID
-            ):
-                flag_type = (
-                    ErrorFlagType(response_msg.data[0])
-                    if response_msg.data and response_msg.data[0] in (0, 1)
-                    else ErrorFlagType.ACTIVE
-                )
+    except can.CanError as e:
+        print(f"[{self.name}] Errore invio frame attacco: {e}")
+        self._on_tx_error()
 
-                if flag_type == ErrorFlagType.ACTIVE:
-                    # Qualcuno (tipicamente la vittima in ERROR_ACTIVE) ha visto un errore
-                    self._on_tx_error()  # TEC +8
-                    error_detected = True
-                    print(
-                        f"[{self.name}] att → TEC +8: Rilevato ERROR_FLAG ACTIVE dopo l'attacco."
-                    )
-
-            if not error_detected:
-                # Nessun ERROR_FLAG ACTIVE visto → TX considerato OK
-                # (o perché la vittima è in PASSIVE e il suo error flag è recessivo)
-                self._on_tx_success()
-                print(f"[{self.name}] att → TEC -1: (TX successo).")
-
-        except can.CanError as e:
-            print(f"[{self.name}] Errore invio frame attacco: {e}")
-            self._on_tx_error()  # TEC++
-
-        finally:
-            time.sleep(0.01)
-            self.currently_transmitting = False
+    finally:
+        time.sleep(0.01)
+        self.currently_transmitting = False
