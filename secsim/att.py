@@ -50,8 +50,9 @@ class AttackerECU(ECU):
 
             self._handle_normal_frame(msg)
 
+
     def _handle_normal_frame(self, msg: can.Message):
-        """"
+        """
         L'Attaccante sniffa il bus e risponde solo al frame della Vittima.
     
         - Stesso arbitration_id della vittima
@@ -126,8 +127,8 @@ class AttackerECU(ECU):
     
         except can.CanError as e:
             print(f"[{self.name}] Errore invio frame attacco: {e}")
-        self._on_tx_error()
-
-    finally:
-        time.sleep(0.01)
-        self.currently_transmitting = False
+            self._on_tx_error()
+    
+        finally:
+            time.sleep(0.01)
+            self.currently_transmitting = False
