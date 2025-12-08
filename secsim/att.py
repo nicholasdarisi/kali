@@ -51,7 +51,7 @@ class AttackerECU(ECU):
             self._handle_normal_frame(msg)
 
     def _handle_normal_frame(self, msg: can.Message):
-        """
+        """"
         L'Attaccante sniffa il bus e risponde solo al frame della Vittima.
     
         - Stesso arbitration_id della vittima
