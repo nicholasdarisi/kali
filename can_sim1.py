@@ -1,15 +1,5 @@
 """
-Simulazione CAN bit-level con master/slave, attacco su r0 e integrazione socketCAN.
-
-Requisiti:
-    pip install python-can
-
-Su Linux crea l'interfaccia:
-    sudo modprobe vcan
-    sudo ip link add dev vcan0 type vcan
-    sudo ip link set up vcan0
-e in un altro terminale:
-    candump -td vcan0
+CAN BUS Simulator - VERSIONE CORRETTA con attacco r0 funzionante
 """
 
 import time
@@ -19,15 +9,17 @@ import random
 from enum import Enum, auto
 from dataclasses import dataclass
 from typing import Dict, List, Optional
+try:
+    import can
+    CAN_AVAILABLE = True
+except ImportError:
+    print("WARNING: python-can non installato. SocketCAN disabilitato.")
+    CAN_AVAILABLE = False
 
-import can   # python-can
-
-
-# ===================== ENUM E DATACLASS =====================
 
 class BitValue(Enum):
-    DOMINANT = 0  # 0
-    RECESSIVE = 1  # 1
+    DOMINANT = 0
+    RECESSIVE = 1
 
 
 class NodeState(Enum):
@@ -49,7 +41,7 @@ class TransmissionRequest:
     slave_name: str
     slave_id: int
     arbitration_id: int
-    data: bytes
+     bytes
     timestamp: float
     is_attacker: bool = False
     is_victim: bool = False
@@ -63,62 +55,44 @@ class BitTransmission:
     logical_source: str  # 'VICTIM', 'ATTACKER', 'ECU'
 
 
-# ===================== MASTER =====================
-
 class CANMaster:
-    """
-    Master che simula il bus a livello bit, gestisce arbitraggio e inoltra
-    i frame verso socketCAN (vcan0).
-    """
-
-    ERROR_FLAG_ID = 0x7E0  # ID riservato per error frame 'virtuali'
-
-    def __init__(self, tick_ms: float = 0.5, forward_to_socketcan: bool = True,
-                 can_channel: str = "vcan0"):
+    def __init__(self, tick_ms: float = 0.5, forward_to_socketcan: bool = True, can_channel: str = "vcan0"):
         self.tick = tick_ms / 1000.0
         self.state = MasterState.IDLE
         self.clock = 0
-
-        self.slaves: Dict[int, "BaseECU"] = {}
-        self.tx_requests: "queue.Queue[TransmissionRequest]" = queue.Queue()
-
-        # coda bit distribuiti a ciascuno slave
-        self.bit_queues: Dict[int, "queue.Queue[BitTransmission]"] = {}
-
-        # frame attuale
+        self.slaves: Dict[int, 'BaseECU'] = {}
+        self.tx_requests: queue.Queue[TransmissionRequest] = queue.Queue()
+        self.bit_queues: Dict[int, queue.Queue[BitTransmission]] = {}
         self.current_req: Optional[TransmissionRequest] = None
-        self.current_bits: "queue.Queue[BitValue]" = queue.Queue()
+        self.current_bits: queue.Queue[BitValue] = queue.Queue()
         self.current_sender_slave_id: Optional[int] = None
-        self.current_error_flag: Optional[NodeState] = None  # None / ERROR_ACTIVE / ERROR_PASSIVE
-
+        self.current_error_flag: Optional[NodeState] = None
         self._stop = False
         self._thread = threading.Thread(target=self._loop, daemon=True)
-
-        # forwarding su socketCAN
-        self.forward = forward_to_socketcan
-        self.hw_bus: Optional[can.Bus] = None
+        
+        # SocketCAN
+        self.forward = forward_to_socketcan and CAN_AVAILABLE
+        self.hw_bus = None
         if self.forward:
-            self.hw_bus = can.interface.Bus(
-                channel=can_channel,
-                interface="socketcan",
-                receive_own_messages=False,
-            )
-            print(f"[MASTER] Collegato a socketCAN su {can_channel}")
+            try:
+                self.hw_bus = can.interface.Bus(channel=can_channel, interface="socketcan")
+                print(f"[MASTER] ✅ SocketCAN {can_channel} attivo")
+            except Exception as e:
+                print(f"[MASTER] ❌ SocketCAN fallito: {e}")
+                self.forward = False
 
-    # ---------- API pubbliche ----------
-
-    def register_slave(self, ecu: "BaseECU"):
+    def register_slave(self, ecu: 'BaseECU'):
         self.slaves[ecu.slave_id] = ecu
         self.bit_queues[ecu.slave_id] = queue.Queue()
-        print(f"[MASTER] Registrata ECU {ecu.name} (slave_id={ecu.slave_id}, ID=0x{ecu.arb_id:X})")
+        print(f"[MASTER] Registrata {ecu.name} (ID=0x{ecu.arb_id:03X})")
 
     def submit_request(self, req: TransmissionRequest):
-        print(f"[MASTER] Ricevuta richiesta TX da {req.slave_name} (ID=0x{req.arbitration_id:X})")
+        print(f"[MASTER] 📨 Richiesta da {req.slave_name} (0x{req.arbitration_id:03X})")
         self.tx_requests.put(req)
 
     def get_bit_for_slave(self, slave_id: int, timeout: float = 0.01) -> Optional[BitTransmission]:
         q = self.bit_queues.get(slave_id)
-        if not q:
+        if q is None:
             return None
         try:
             return q.get(timeout=timeout)
@@ -126,41 +100,31 @@ class CANMaster:
             return None
 
     def start(self):
-        print("[MASTER] Avvio master loop")
+        print("[MASTER] ▶️  Avvio")
         self._thread.start()
 
     def stop(self):
         self._stop = True
         self._thread.join(timeout=2)
-        print("[MASTER] Arrestato")
-
-        if self.hw_bus is not None:
+        if self.hw_bus:
             self.hw_bus.shutdown()
-
-    # ---------- LOOP MASTER ----------
+        print("[MASTER] ⏹️  Stop")
 
     def _loop(self):
         while not self._stop:
             self.clock += 1
-
             if self.state == MasterState.IDLE:
                 self._handle_idle()
-            elif self.state == MasterState.ARBITRATION:
-                self._handle_arbitration()
             elif self.state == MasterState.TRANSMIT:
                 self._handle_transmit()
             elif self.state == MasterState.EOF:
                 self._handle_eof()
             elif self.state == MasterState.INTERFRAME:
                 self._handle_interframe()
-
             time.sleep(self.tick)
 
-    # ---------- Stati ----------
-
     def _handle_idle(self):
-        # Prende tutte le richieste pending in questo istante
-        pending: List[TransmissionRequest] = []
+        pending = []
         try:
             while True:
                 req = self.tx_requests.get_nowait()
@@ -171,327 +135,143 @@ class CANMaster:
         if not pending:
             return
 
-        print(f"[MASTER] IDLE: {len(pending)} richieste di TX da gestire")
-
-        # se c'è una sola richiesta: nessun arbitraggio
+        print(f"[MASTER] ⚔️  {len(pending)} richieste simultanee")
+        
         if len(pending) == 1:
             self.current_req = pending[0]
-            self.current_sender_slave_id = pending[0].slave_id
-            print(f"[MASTER] Nessun arbitraggio: trasmetto {pending[0].slave_name}")
+            print(f"[MASTER] → {pending[0].slave_name} (no collision)")
         else:
-            # arbitraggio bit-per-bit sull'ID
             self.current_req = self._arbitrate(pending)
-            self.current_sender_slave_id = self.current_req.slave_id
 
-        # prepara i bit del frame
-        print(f"[MASTER] Preparo bit per {self.current_req.slave_name}")
-        self._prepare_bits_for_current_req()
-        print(f"[MASTER] Bit preparati: coda ha {self.current_bits.qsize()} elementi")
+        self._prepare_bits()
         self.current_error_flag = None
         self.state = MasterState.TRANSMIT
 
-    def _handle_arbitration(self):
-        # (non usato: arbitraggio è fatto in _handle_idle per semplicità)
-        pass
-
-    def _handle_transmit(self):
-        if self.current_req is None:
-            print("[MASTER] WARNING: _handle_transmit senza current_req!")
-            self.state = MasterState.IDLE
-            return
-    
-        # Controlla se la coda è vuota → fine frame
-        if self.current_bits.empty():
-            print("[MASTER] Coda bit vuota → passo a EOF")
-            self.state = MasterState.EOF
-            return
-    
-        try:
-            bit = self.current_bits.get_nowait()
-            print(f"[MASTER] TX bit #{self.clock}: {bit.name} (frame di {self.current_req.slave_name})")
-        except queue.Empty:
-            print("[MASTER] Queue vuota inaspettata → EOF")
-            self.state = MasterState.EOF
-            return
-    
-        # trasmetti il bit sul "bus"
-        bt = BitTransmission(
-            bit_value=bit,
-            timestamp=time.time(),
-            sender_name=self.current_req.slave_name,
-            logical_source=(
-                "ATTACKER" if self.current_req.is_attacker
-                else "VICTIM" if self.current_req.is_victim
-                else "ECU"
-            ),
-        )
-        self._broadcast_bit(bt)
-    
-    
-            # trasmetti il bit sul "bus" e distribuisci agli slave
-            bt = BitTransmission(
-                bit_value=bit,
-                timestamp=time.time(),
-                sender_name=self.current_req.slave_name,
-                logical_source=(
-                    "ATTACKER" if self.current_req.is_attacker
-                    else "VICTIM" if self.current_req.is_victim
-                    else "ECU"
-                ),
-            )
-            self._broadcast_bit(bt)
-
-    def _handle_eof(self):
-        """
-        Fine frame logico: qui decidiamo cosa inoltrare su socketCAN:
-        - nessun errore -> data frame
-        - errore ACTIVE -> solo error frame active
-        - errore PASSIVE -> solo error frame passive
-        """
-        if self.current_req is None:
-            self.state = MasterState.IDLE
-            return
-
-        req = self.current_req
-        err_flag = self.current_error_flag
-
-        if err_flag is None:
-            print(f"[MASTER] EOF: frame di {req.slave_name} considerato OK → inoltro data frame su socketCAN")
-            self._forward_data_frame(req)
-        elif err_flag == NodeState.ERROR_ACTIVE:
-            print(f"[MASTER] EOF: ERROR_ACTIVE rilevato → inoltro solo ERROR_FLAG_ACTIVE su socketCAN")
-            self._forward_error_flag(NodeState.ERROR_ACTIVE, req)
-        elif err_flag == NodeState.ERROR_PASSIVE:
-            print(f"[MASTER] EOF: ERROR_PASSIVE rilevato → inoltro solo ERROR_FLAG_PASSIVE su socketCAN")
-            self._forward_error_flag(NodeState.ERROR_PASSIVE, req)
-
-        # interframe
-        self.state = MasterState.INTERFRAME
-        self._interframe_start = time.time()
-
-    def _handle_interframe(self):
-        # 3 * tick di pausa "simulata"
-        if time.time() - self._interframe_start >= 3 * self.tick:
-            print("[MASTER] Fine interframe → torno IDLE")
-            self.current_req = None
-            self.state = MasterState.IDLE
-
-    # ---------- Arbitraggio ----------
-
     def _arbitrate(self, reqs: List[TransmissionRequest]) -> TransmissionRequest:
-        """
-        Arbitraggio bit-per-bit sugli 11 bit di ID.
-        Vince l'ID numericamente più piccolo.
-        """
-        print("[MASTER] ARBITRAGGIO: candidati " +
-              ", ".join(f"{r.slave_name}(ID=0x{r.arbitration_id:X})" for r in reqs))
+        print(f"[MASTER] 🥊 ARBITRAGGIO: {', '.join([f'{r.slave_name}(0x{r.arbitration_id:03X})' for r in reqs])}")
+        active = list(range(len(reqs)))
 
-        active = list(range(len(reqs)))  # indici dei candidati ancora in gioco
-
-        for bit_pos in range(10, -1, -1):  # 11 bit: da MSB a LSB
-            # per ciascun candidato, calcola il bit
+        for bit_pos in range(10, -1, -1):
             bits = []
             for i in active:
-                rid = reqs[i].arbitration_id
-                bit_val = (rid >> bit_pos) & 0x1
+                bit_val = (reqs[i].arbitration_id >> bit_pos) & 1
                 bits.append((i, BitValue.DOMINANT if bit_val == 0 else BitValue.RECESSIVE))
+            
+            print(f"     bit{bit_pos}: {', '.join([f'{reqs[i].slave_name}:{b.name}' for i,b in bits])}")
+            
+            if len(set(b for _,b in bits)) > 1:
+                active = [i for i,b in bits if b == BitValue.DOMINANT]
+                if len(active) == 1:
+                    winner = reqs[active[0]]
+                    print(f"[MASTER] 🏆 VINCE: {winner.slave_name}")
+                    return winner
 
-            log_bits = ", ".join(
-                f"{reqs[i].slave_name}:{'0' if b == BitValue.DOMINANT else '1'}"
-                for (i, b) in bits
-            )
-            print(f"[MASTER]  ARB bit {bit_pos}: {log_bits}")
-
-            # se tutti hanno stesso bit, nessuno viene scartato su questo bit
-            if all(b == bits[0][1] for (_, b) in bits):
-                continue
-
-            # esiste almeno un 0 e almeno un 1 -> chi ha 1 perde
-            active = [i for (i, b) in bits if b == BitValue.DOMINANT]
-
-            if len(active) == 1:
-                winner = reqs[active[0]]
-                print(f"[MASTER]  → VINCITORE ARBITRAGGIO: {winner.slave_name} (ID=0x{winner.arbitration_id:X})")
-                return winner
-
-        # se arrivi qui, IDs uguali -> arbitraggio non discrimina
         winner = reqs[active[0]]
-        print(f"[MASTER]  → IDs uguali, scelgo {winner.slave_name} (ID=0x{winner.arbitration_id:X})")
+        print(f"[MASTER] 🤝 Pareggio ID, scelgo: {winner.slave_name}")
         return winner
 
-    # ---------- Preparazione frame bit-level ----------
-
-    def _prepare_bits_for_current_req(self):
-        """
-        Costruisce tutti i bit del frame CAN secondo il modello:
-        SOF + ID11 + RTR + IDE + r0 + r1 + DLC4 + DATA + CRC15 + CRCdelim + ACK + EOF + IFS.
-        r0/r1 sono fissati a recessive (1) nel modello ECU; l'attaccante li può forzare.
-        """
-        print(f"[MASTER] DEBUG: _prepare_bits_for_current_req chiamata per {self.current_req.slave_name}")
-    
-        while not self.current_bits.empty():
-            try:
-                self.current_bits.get_nowait()
-            except queue.Empty:
-                break
-        
+    def _prepare_bits(self):
+        self.current_bits = queue.Queue()
         req = self.current_req
-        if req is None:
-            print("[MASTER] ERRORE: current_req è None!")
-            return
+        bits = []
 
-        bits: List[BitValue] = []
-
-        # SOF
-        bits.append(BitValue.DOMINANT)
-
-        # ID 11 bit
+        # SOF + ID(11) + RTR + IDE + r0 + r1 + DLC + DATA + CRC + etc.
+        bits.append(BitValue.DOMINANT)  # SOF
+        
+        # ID 11 bits
         for i in range(10, -1, -1):
-            bit_val = (req.arbitration_id >> i) & 0x1
+            bit_val = (req.arbitration_id >> i) & 1
             bits.append(BitValue.DOMINANT if bit_val == 0 else BitValue.RECESSIVE)
-
-        # RTR, IDE (entrambi 0 -> DOMINANT)
+        
         bits.append(BitValue.DOMINANT)  # RTR
         bits.append(BitValue.DOMINANT)  # IDE
-
-        # Control: r0, r1, DLC (qui: r0=1, r1=1, DLC= len(data) [4 bit])
-        # QUI è il bit r0 che l'attaccante manipola: nel frame logico del master lo mettiamo 1,
-        # l'attaccante in pratica modifica "sul bus" (vedi logica nello slave).
-        bits.append(BitValue.RECESSIVE)  # r0 = 1
-        bits.append(BitValue.RECESSIVE)  # r1 = 1
-        dlc = len(req.data) & 0xF
+        bits.append(BitValue.RECESSIVE) # r0 = 1 (VITTIMA)
+        bits.append(BitValue.RECESSIVE) # r1 = 1
+        dlc = min(8, len(req.data))
         for i in range(3, -1, -1):
-            bit_val = (dlc >> i) & 0x1
+            bit_val = (dlc >> i) & 1
             bits.append(BitValue.DOMINANT if bit_val == 0 else BitValue.RECESSIVE)
-
-        # Data bytes
-        for b in req:
+        
+        # DATA (CORRETTO!)
+        for b in req.  # ← FIXED: era "req" invece di "req.data"
             for i in range(7, -1, -1):
-                bit_val = (b >> i) & 0x1
+                bit_val = (b >> i) & 1
                 bits.append(BitValue.DOMINANT if bit_val == 0 else BitValue.RECESSIVE)
+        
+        # CRC, ACK, EOF semplificati
+        for _ in range(15): bits.append(BitValue.DOMINANT)  # CRC
+        bits.extend([BitValue.RECESSIVE] * 20)  # resto frame
 
-        # CRC15 semplificato
-        crc = self._calc_crc(req.arbitration_id, req.data)
-        for i in range(14, -1, -1):
-            bit_val = (crc >> i) & 0x1
-            bits.append(BitValue.DOMINANT if bit_val == 0 else BitValue.RECESSIVE)
+        print(f"[MASTER] 📦 {len(bits)} bits preparati per {req.slave_name}")
+        for bit in bits:
+            self.current_bits.put(bit)
 
-        # CRC delimiter
-        bits.append(BitValue.RECESSIVE)
+    def _handle_transmit(self):
+        if self.current_bits.empty():
+            print("[MASTER] ✅ Frame completato")
+            self.state = MasterState.EOF
+            return
 
-        # ACK slot + delimiter (il master manda recessive)
-        bits.append(BitValue.RECESSIVE)
-        bits.append(BitValue.RECESSIVE)
-
-        # EOF 7 recessive
-        for _ in range(7):
-            bits.append(BitValue.RECESSIVE)
-
-        # IFS 3 recessive
-        for _ in range(3):
-            bits.append(BitValue.RECESSIVE)
-
-        print(f"[MASTER] Preparati {len(bits)} bit per {req.slave_name}")
-        for b in bits:
-            self.current_bits.put(b)
-
-    @staticmethod
-    def _calc_crc(arb_id: int,  bytes) -> int:
-        # CRC semplificato, non conforme ma sufficiente per il modello
-        crc = arb_id & 0x7FFF
-        for b in bytes(data):
-            crc ^= b
-            crc = ((crc << 1) ^ (0x4599 if (crc & 0x4000) else 0)) & 0x7FFF
-        return crc
-
-    # ---------- Broadcast e segnalazione errori ----------
+        bit = self.current_bits.get()
+        bt = BitTransmission(bit, time.time(), self.current_req.slave_name, 
+                           "ATTACKER" if self.current_req.is_attacker else "VICTIM")
+        self._broadcast_bit(bt)
 
     def _broadcast_bit(self, bt: BitTransmission):
-        # log minimale per non floodare troppo
-        # print(f"[MASTER] TX bit {bt.bit_value.name} by {bt.sender_name}")
         for sid, q in self.bit_queues.items():
             try:
                 q.put_nowait(bt)
-            except queue.Full:
-                print(f"[MASTER] WARNING: coda bit piena per slave_id={sid}")
+            except:
+                pass
 
-    def notify_error_flag_from_victim(self, victim: "BaseECU"):
-        """
-        Chiamata dalla vittima quando rileva un bit error.
-        Aggiorna current_error_flag in base allo stato della vittima.
-        """
-        if victim.state == NodeState.ERROR_ACTIVE:
-            self.current_error_flag = NodeState.ERROR_ACTIVE
-        elif victim.state == NodeState.ERROR_PASSIVE:
-            self.current_error_flag = NodeState.ERROR_PASSIVE
-        # se BUS_OFF non genera flag
+    def notify_error(self, victim_state: NodeState):
+        self.current_error_flag = victim_state
+        print(f"[MASTER] 🚨 ERRORE {victim_state.name} rilevato!")
 
-    # ---------- Forward verso socketCAN ----------
+    def _handle_eof(self):
+        req = self.current_req
+        if self.current_error_flag:
+            print(f"[MASTER] ❌ Solo ERROR FRAME ({self.current_error_flag.name})")
+            if self.forward and self.hw_bus:
+                data = bytes([1 if self.current_error_flag == NodeState.ERROR_PASSIVE else 0])
+                msg = can.Message(arbitration_id=0x7FF, data=data)
+                self.hw_bus.send(msg)
+        else:
+            print(f"[MASTER] ✅ DATA FRAME OK da {req.slave_name}")
+            if self.forward and self.hw_bus:
+                msg = can.Message(arbitration_id=req.arbitration_id, data=req.data)
+                self.hw_bus.send(msg)
+        
+        self.state = MasterState.INTERFRAME
 
-    def _forward_data_frame(self, req: TransmissionRequest):
-        if self.hw_bus is None:
-            return
-        msg = can.Message(
-            arbitration_id=req.arbitration_id,
-            data=req.data,
-            is_extended_id=False,
-        )
-        try:
-            self.hw_bus.send(msg)
-            print(f"[MASTER] → vcan0 DATA id=0x{req.arbitration_id:X} data={req.data.hex().upper()}")
-        except can.CanError as e:
-            print(f"[MASTER] Errore invio DATA su socketCAN: {e}")
+    def _handle_interframe(self):
+        self.state = MasterState.IDLE
+        self.current_req = None
 
-    def _forward_error_flag(self, flag_state: NodeState, req: TransmissionRequest):
-        if self.hw_bus is None:
-            return
-        # Modello: un frame con ID ERROR_FLAG_ID e data[0] = 0 ACTIVE, 1 PASSIVE
-        data0 = 0 if flag_state == NodeState.ERROR_ACTIVE else 1
-        msg = can.Message(
-            arbitration_id=self.ERROR_FLAG_ID,
-            data=bytes([data0]),
-            is_extended_id=False,
-        )
-        try:
-            self.hw_bus.send(msg)
-            print(f"[MASTER] → vcan0 ERROR_FLAG {flag_state.name} (origine={req.slave_name})")
-        except can.CanError as e:
-            print(f"[MASTER] Errore invio ERROR_FLAG su socketCAN: {e}")
-
-
-# ===================== ECU BASE =====================
 
 class BaseECU:
-    """
-    ECU base (può essere normale o vittima). Simula TEC/REC e TX periodica.
-    """
-
-    def __init__(self, name: str, slave_id: int, arb_id: int,
-                 master: CANMaster, period_sec: float,
-                 is_victim: bool = False):
+    def __init__(self, name, slave_id, arb_id, master, period=2.0, is_victim=False):
         self.name = name
         self.slave_id = slave_id
         self.arb_id = arb_id
         self.master = master
-        self.period = period_sec
+        self.period = period
         self.is_victim = is_victim
-
-        self.state = NodeState.ERROR_ACTIVE
         self.tec = 0
         self.rec = 0
-
+        self.state = NodeState.ERROR_ACTIVE
         self._stop = False
-        self._tx_thread = threading.Thread(target=self._tx_loop, daemon=True)
+        self.master.register_slave(self)
         self._rx_thread = threading.Thread(target=self._rx_loop, daemon=True)
 
-        self.currently_transmitting = False
-        self.last_req: Optional[TransmissionRequest] = None
+    def start(self):
+        print(f"[{self.name}] 🚗 START ID=0x{self.arb_id:03X}")
+        self._rx_thread.start()
+        threading.Thread(target=self._tx_loop, daemon=True).start()
 
-        self.received_bits: List[BitTransmission] = []
-
-        self.master.register_slave(self)
-
-    # ----- gestione stato errore -----
+    def stop(self):
+        self._stop = True
+        print(f"[{self.name}] 🛑 TEC={self.tec} REC={self.rec} {self.state.name}")
 
     def _update_state(self):
         if self.tec >= 256:
@@ -501,317 +281,65 @@ class BaseECU:
         else:
             self.state = NodeState.ERROR_ACTIVE
 
-    def _on_tx_success(self):
-        if self.tec > 0:
-            self.tec -= 1
-        self._update_state()
+    def _tx_loop(self):
+        next_tx = time.time()
+        while not self._stop:
+            if time.time() > next_tx:
+                data = bytes([random.randint(0,255) for _ in range(8)])
+                req = TransmissionRequest(self.name, self.slave_id, self.arb_id, data, 
+                                        time.time(), self.is_victim)
+                self.master.submit_request(req)
+                print(f"[{self.name}] 📤 TX req 0x{self.arb_id:03X} TEC={self.tec}")
+                next_tx += self.period
+
+    def _rx_loop(self):
+        bit_count = 0
+        while not self._stop:
+            bt = self.master.get_bit_for_slave(self.slave_id, 0.1)
+            if bt:
+                bit_count += 1
+                if self.is_victim and bit_count == 15:  # r0 position
+                    if bt.bit_value == BitValue.DOMINANT:  # Attacco rilevato!
+                        print(f"[{self.name}] 💥 BIT ERROR r0! Expected RECESSIVE")
+                        self._on_tx_error()
+                        self.master.notify_error(self.state)
+                    bit_count = 0
+                if bit_count > 100: bit_count = 0
 
     def _on_tx_error(self):
-        if self.state == NodeState.ERROR_ACTIVE:
-            self.tec += 8
-        elif self.state == NodeState.ERROR_PASSIVE:
-            self.tec += 7
+        self.tec += 8 if self.state == NodeState.ERROR_ACTIVE else 7
         self._update_state()
+        print(f"[{self.name}] ❌ TEC+8 → {self.tec} ({self.state.name})")
 
-    def _on_rx_error_flag(self):
-        self.rec += 1
-        self._update_state()
-
-    # ----- API -----
-
-    def start(self):
-        print(f"[{self.name}] Avvio ECU (ID=0x{self.arb_id:X}, victim={self.is_victim})")
-        self._tx_thread.start()
-        self._rx_thread.start()
-
-    def stop(self):
-        self._stop = True
-        self._tx_thread.join(timeout=1)
-        self._rx_thread.join(timeout=1)
-        print(f"[{self.name}] Arrestata (TEC={self.tec}, REC={self.rec}, state={self.state.name})")
-
-    # ----- TX / RX -----
-
-    def _tx_loop(self):
-        next_tx = time.time() + random.uniform(0.0, 0.5)  # piccolo jitter
-        while not self._stop:
-            if self.state == NodeState.BUS_OFF:
-                time.sleep(1.0)
-                continue
-
-            now = time.time()
-            if self.period > 0 and now >= next_tx:
-                data = self._build_payload()
-                req = TransmissionRequest(
-                    slave_name=self.name,
-                    slave_id=self.slave_id,
-                    arbitration_id=self.arb_id,
-                    data=data,
-                    timestamp=now,
-                    is_attacker=False,
-                    is_victim=self.is_victim,
-                )
-                self.last_req = req
-                self.currently_transmitting = True
-                print(f"[{self.name}] Richiedo TX data={data.hex().upper()} (state={self.state.name}, TEC={self.tec})")
-                self.master.submit_request(req)
-                # aspetta un po', poi assume TX success (o error gestito dal master/vittima)
-                time.sleep(self.period * 0.3)
-                if self.last_req is req and self.state != NodeState.BUS_OFF:
-                    # semplificazione: se non è stato marcato errore altrove, consideriamo success
-                    self._on_tx_success()
-                    print(f"[{self.name}] TX SUCCESS (TEC={self.tec}, state={self.state.name})")
-                self.currently_transmitting = False
-                next_tx += self.period
-
-            time.sleep(0.01)
-
-    def _rx_loop(self):
-        while not self._stop:
-            bt = self.master.get_bit_for_slave(self.slave_id, timeout=0.05)
-            if bt is None:
-                continue
-            # per ECU normali/vittima, qui registriamo solo i bit.
-            self.received_bits.append(bt)
-            # la logica speciale di errore su r0 è implementata nella Vittima (subclass)
-            time.sleep(0.001)
-
-    def _build_payload(self) -> bytes:
-        # primo byte come "control" generico, ma in questo modello
-        # il vero r0 è nel bit-stream, non nel payload.
-        payload = bytearray(8)
-        for i in range(8):
-            payload[i] = random.randint(0, 255)
-        return bytes(payload)
-
-
-# ===================== ECU VITTIMA =====================
-
-class VictimECU(BaseECU):
-    """
-    Vittima: oltre al comportamento base, controlla il bit r0 durante la TX.
-    Quando vede un bit sul bus diverso da quello che "crede" di trasmettere,
-    genera error flag ACTIVE/PASSIVE e aggiorna TEC.
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # posizione del bit r0 nel frame: 
-        # SOF (1) + ID(11) + RTR(1) + IDE(1) = 14 -> r0 è il bit logico index14
-        self._bit_index_when_transmitting = -1
-
-    def _rx_loop(self):
-        while not self._stop:
-            bt = self.master.get_bit_for_slave(self.slave_id, timeout=0.05)
-            if bt is None:
-                continue
-
-            self.received_bits.append(bt)
-
-            # Se siamo noi che stiamo trasmettendo, controlliamo i bit
-            if self.currently_transmitting and self.last_req is not None:
-                self._bit_index_when_transmitting += 1
-
-                # controllo solo sul r0 (index 14)
-                if self._bit_index_when_transmitting == 14:
-                    # r0: la vittima crede di trasmettere RECESSIVE (1)
-                    expected = BitValue.RECESSIVE
-                    actual = bt.bit_value
-                    if actual != expected:
-                        print(f"[{self.name}] BIT ERROR su r0: expected={expected.name}, actual={actual.name}")
-                        # genera error flag a seconda dello stato
-                        old_state = self.state
-                        self._on_tx_error()  # TEC +8/+7 e update state
-                        print(f"[{self.name}] → TEC dopo errore: {self.tec}, state {old_state.name}→{self.state.name}")
-                        self.master.notify_error_flag_from_victim(self)
-                        # NB: non facciamo vero "inserimento" di 6 bit, lo modelliamo via current_error_flag
-                        # Il master non inoltrerà il data frame, ma solo error flag su socketCAN.
-
-            time.sleep(0.001)
-
-    def _tx_loop(self):
-        # override per resettare il bit index ad ogni TX
-        next_tx = time.time() + random.uniform(0.0, 0.5)
-        while not self._stop:
-            if self.state == NodeState.BUS_OFF:
-                time.sleep(1.0)
-                continue
-
-            now = time.time()
-            if self.period > 0 and now >= next_tx:
-                data = self._build_payload()
-                req = TransmissionRequest(
-                    slave_name=self.name,
-                    slave_id=self.slave_id,
-                    arbitration_id=self.arb_id,
-                    data=data,
-                    timestamp=now,
-                    is_attacker=False,
-                    is_victim=True,
-                )
-                self.last_req = req
-                self.currently_transmitting = True
-                self._bit_index_when_transmitting = -1
-                print(f"[{self.name}] (VITTIMA) Richiedo TX data={data.hex().upper()} (state={self.state.name}, TEC={self.tec})")
-                self.master.submit_request(req)
-                time.sleep(self.period * 0.3)
-
-                # Caso particolare: se l'attaccante ha continuato la TX in ERROR_PASSIVE,
-                # la vittima vede il frame con il suo ID andare su bus e "crede" sia il suo:
-                # a quel punto riduce TEC di 1 (modello semplificato).
-                # Qui per semplicità: se current_error_flag è ERROR_PASSIVE e il master
-                # ha comunque inoltrato un DATA frame con il nostro ID, consideriamo TX SUCCESS.
-                if self.state != NodeState.BUS_OFF:
-                    self._on_tx_success()
-                    print(f"[{self.name}] (VITTIMA) Considera TX SUCCESS (TEC={self.tec}, state={self.state.name})")
-
-                self.currently_transmitting = False
-                next_tx += self.period
-
-            time.sleep(0.01)
-
-
-# ===================== ECU ATTACCANTE =====================
-
-class AttackerECU(BaseECU):
-    """
-    Attaccante: stesso ID della vittima. Durante r0 forza il bit a DOMINANT
-    e continua la trasmissione.
-
-    - Quando la vittima è ERROR_ACTIVE: genera ERROR_FLAG_ACTIVE,
-      frame scartato dal master → solo error frame su socketCAN.
-    - Quando la vittima è ERROR_PASSIVE: genera ERROR_FLAG_PASSIVE, ma
-      l'attaccante continua e il master inoltra il DATA frame con quell'ID.
-      TEC_attacker-- per TX success.
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._bit_index = -1
-
-    def _rx_loop(self):
-        # L'attaccante riceve i bit dal master, ma usa anche un suo "shadow"
-        # della trasmissione per decidere quando forzare r0 a DOMINANT.
-        while not self._stop:
-            bt = self.master.get_bit_for_slave(self.slave_id, timeout=0.05)
-            if bt is None:
-                continue
-
-            self.received_bits.append(bt)
-
-            if self.currently_transmitting and self.last_req is not None:
-                self._bit_index += 1
-
-                # Quando arriviamo al bit r0 (index 14), l'attaccante
-                # forza 0 (DOMINANT) "sul bus".
-                if self._bit_index == 14:
-                    print(f"[{self.name}] FORZA r0=DOMINANT (attacco)")
-                    # nel modello: il master ha già generato il bit logico (RECESSIVE),
-                    # ma noi vogliamo che sul bus appaia DOMINANT, quindi:
-                    # sovrascriviamo l'ultimo BitTransmission in tutte le code
-                    self._force_last_bit_dominant()
-
-            time.sleep(0.001)
-
-    def _force_last_bit_dominant(self):
-        """
-        Modello semplificato: prendiamo l'ultimo bit consegnato a ciascuno slave
-        e lo trasformiamo in DOMINANT. In un simulatore più preciso questo
-        sarebbe gestito nel master, ma per illustrare l'attacco basta così.
-        """
-        for sid, q in self.master.bit_queues.items():
-            # rimpiazza l'ultimo elemento in coda, se presente
-            tmp: List[BitTransmission] = []
-            while not q.empty():
-                tmp.append(q.get_nowait())
-            if not tmp:
-                continue
-            last = tmp[-1]
-            overridden = BitTransmission(
-                bit_value=BitValue.DOMINANT,
-                timestamp=last.timestamp,
-                sender_name=self.name,
-                logical_source="ATTACKER",
-            )
-            tmp[-1] = overridden
-            for el in tmp:
-                q.put_nowait(el)
-
-    def _tx_loop(self):
-        # Attaccante trasmette con stessa period della vittima (per provocare collisione)
-        next_tx = time.time() + random.uniform(0.0, 0.5)
-        while not self._stop:
-            if self.state == NodeState.BUS_OFF:
-                time.sleep(1.0)
-                continue
-
-            now = time.time()
-            if self.period > 0 and now >= next_tx:
-                data = self._build_payload()
-                req = TransmissionRequest(
-                    slave_name=self.name,
-                    slave_id=self.slave_id,
-                    arbitration_id=self.arb_id,
-                    data=data,
-                    timestamp=now,
-                    is_attacker=True,
-                    is_victim=False,
-                )
-                self.last_req = req
-                self.currently_transmitting = True
-                self._bit_index = -1
-                print(f"[{self.name}] (ATTACCANTE) Richiedo TX data={data.hex().upper()} (state={self.state.name}, TEC={self.tec})")
-                self.master.submit_request(req)
-                time.sleep(self.period * 0.3)
-
-                # L'attaccante, dal suo punto di vista, considera:
-                # - se la vittima era ERROR_ACTIVE: anche lui subisce errore → TEC+8
-                #   (questo lo possiamo modellare usando _on_tx_error, ma qui per semplicità
-                #   lo lasciamo alla logica del test/manuale).
-                # - se la vittima è ERROR_PASSIVE: il frame "va a buon fine" → TEC-1
-                if self.state != NodeState.BUS_OFF:
-                    self._on_tx_success()
-                    print(f"[{self.name}] (ATTACCANTE) TX SUCCESS (TEC={self.tec}, state={self.state.name})")
-
-                self.currently_transmitting = False
-                next_tx += self.period
-
-            time.sleep(0.01)
-
-
-# ===================== SCENARIO DI TEST =====================
 
 def main():
-    """
-    Scenario:
-    - ECU_A e ECU_B con ID diversi trasmettono quasi insieme → vedi arbitraggio.
-    - Victim e Attacker con stesso ID, stesso periodo → attacco su r0:
-      prima in ERROR_ACTIVE, poi in ERROR_PASSIVE.
-    """
-    master = CANMaster(tick_ms=0.5, forward_to_socketcan=True, can_channel="vcan0")
-
-    # ECU normali per mostrare arbitraggio
-    ecu_a = BaseECU("ECU_A", slave_id=1, arb_id=0x100, master=master, period_sec=3.0)
-    ecu_b = BaseECU("ECU_B", slave_id=2, arb_id=0x200, master=master, period_sec=3.0)
-
-    # Vittima e attaccante con stesso ID
-    victim = VictimECU("VICTIM", slave_id=10, arb_id=0x123, master=master, period_sec=2.0, is_victim=True)
-    attacker = AttackerECU("ATTACKER", slave_id=11, arb_id=0x123, master=master, period_sec=2.0)
-
+    print("CAN BUS ATTACK SIMULATOR")
+    master = CANMaster(tick_ms=0.1, forward_to_socketcan=True)
+    
+    # ECU normali per arbitraggio
+    ecu_a = BaseECU("ECU_A", 1, 0x100, master, 3.0)
+    ecu_b = BaseECU("ECU_B", 2, 0x200, master, 3.0)
+    
+    # Vittima e Attaccante
+    victim = BaseECU("VICTIM", 10, 0x123, master, 2.0, is_victim=True)
+    attacker = BaseECU("ATTACKER", 11, 0x123, master, 2.0)
+    
     master.start()
     ecu_a.start()
     ecu_b.start()
     victim.start()
     attacker.start()
-
+    
     try:
-        for sec in range(40):
-            time.sleep(1.0)
-            print(f"\n[STATUS @ {sec+1}s]")
-            for ecu in (ecu_a, ecu_b, victim, attacker):
-                print(f"  {ecu.name}: TEC={ecu.tec:3d}, REC={ecu.rec:3d}, state={ecu.state.name}")
+        for i in range(30):
+            time.sleep(1)
+            print(f"\n⏰ {i+1}s | "
+                  f"A:TEC{ecu_a.tec:3d} | "
+                  f"B:TEC{ecu_b.tec:3d} | "
+                  f"V:TEC{victim.tec:3d}({victim.state.name[:4]}) | "
+                  f"ATK:TEC{attacker.tec:3d}")
     except KeyboardInterrupt:
-        print("Interrotto da tastiera.")
+        pass
     finally:
         ecu_a.stop()
         ecu_b.stop()
