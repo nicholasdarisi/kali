@@ -49,7 +49,7 @@ class TransmissionRequest:
     slave_name: str
     slave_id: int
     arbitration_id: int
-     bytes
+    data: bytes
     timestamp: float
     is_attacker: bool = False
     is_victim: bool = False
@@ -184,7 +184,9 @@ class CANMaster:
             self.current_sender_slave_id = self.current_req.slave_id
 
         # prepara i bit del frame
+        print(f"[MASTER] Preparo bit per {self.current_req.slave_name}")
         self._prepare_bits_for_current_req()
+        print(f"[MASTER] Bit preparati: coda ha {self.current_bits.qsize()} elementi")
         self.current_error_flag = None
         self.state = MasterState.TRANSMIT
 
@@ -194,18 +196,25 @@ class CANMaster:
 
     def _handle_transmit(self):
         if self.current_req is None:
+            print("[MASTER] WARNING: _handle_transmit senza current_req!")
             self.state = MasterState.IDLE
             return
-
-        try:
-            bit = self.current_bits.get_nowait()
-        except queue.Empty:
-            # fine frame -> EOF
-            print("[MASTER] Fine bit del frame logico, passo a EOF")
+    
+        # Controlla se la coda è vuota → fine frame
+        if self.current_bits.empty():
+            print("[MASTER] Coda bit vuota → passo a EOF")
             self.state = MasterState.EOF
             return
-
-        # trasmetti il bit sul "bus" e distribuisci agli slave
+    
+        try:
+            bit = self.current_bits.get_nowait()
+            print(f"[MASTER] TX bit #{self.clock}: {bit.name} (frame di {self.current_req.slave_name})")
+        except queue.Empty:
+            print("[MASTER] Queue vuota inaspettata → EOF")
+            self.state = MasterState.EOF
+            return
+    
+        # trasmetti il bit sul "bus"
         bt = BitTransmission(
             bit_value=bit,
             timestamp=time.time(),
@@ -217,6 +226,20 @@ class CANMaster:
             ),
         )
         self._broadcast_bit(bt)
+    
+    
+            # trasmetti il bit sul "bus" e distribuisci agli slave
+            bt = BitTransmission(
+                bit_value=bit,
+                timestamp=time.time(),
+                sender_name=self.current_req.slave_name,
+                logical_source=(
+                    "ATTACKER" if self.current_req.is_attacker
+                    else "VICTIM" if self.current_req.is_victim
+                    else "ECU"
+                ),
+            )
+            self._broadcast_bit(bt)
 
     def _handle_eof(self):
         """
@@ -304,11 +327,17 @@ class CANMaster:
         SOF + ID11 + RTR + IDE + r0 + r1 + DLC4 + DATA + CRC15 + CRCdelim + ACK + EOF + IFS.
         r0/r1 sono fissati a recessive (1) nel modello ECU; l'attaccante li può forzare.
         """
+        print(f"[MASTER] DEBUG: _prepare_bits_for_current_req chiamata per {self.current_req.slave_name}")
+    
         while not self.current_bits.empty():
-            self.current_bits.get_nowait()
-
+            try:
+                self.current_bits.get_nowait()
+            except queue.Empty:
+                break
+        
         req = self.current_req
         if req is None:
+            print("[MASTER] ERRORE: current_req è None!")
             return
 
         bits: List[BitValue] = []
@@ -336,7 +365,7 @@ class CANMaster:
             bits.append(BitValue.DOMINANT if bit_val == 0 else BitValue.RECESSIVE)
 
         # Data bytes
-        for b in req.
+        for b in req:
             for i in range(7, -1, -1):
                 bit_val = (b >> i) & 0x1
                 bits.append(BitValue.DOMINANT if bit_val == 0 else BitValue.RECESSIVE)
@@ -370,7 +399,7 @@ class CANMaster:
     def _calc_crc(arb_id: int,  bytes) -> int:
         # CRC semplificato, non conforme ma sufficiente per il modello
         crc = arb_id & 0x7FFF
-        for b in 
+        for b in bytes(data):
             crc ^= b
             crc = ((crc << 1) ^ (0x4599 if (crc & 0x4000) else 0)) & 0x7FFF
         return crc
