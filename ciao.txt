@@ -1,0 +1,80 @@
+CAN master-slave bit-level simulator (continuous bus-off test)
+[MASTER] START
+[MASTER] Registered ECU ECU_A (slave_id=1, ID=0x080)
+[MASTER] Registered ECU ECU_B (slave_id=2, ID=0x080)
+[MASTER] Registered ECU ECU_D (slave_id=4, ID=0x123)
+[MASTER] Registered ECU ECU_E (slave_id=5, ID=0x123)
+[ECU_A] START slave_id=1 ID=0x080
+[ECU_B] START slave_id=2 ID=0x080
+[ECU_D] START slave_id=4 ID=0x123
+[ECU_E] START slave_id=5 ID=0x123
+Simulazione avviata - continua fino a BUS-OFF... (Ctrl+C per fermare)
+[MASTER] RX start-intent from ECU_A (ID=0x080)
+[ECU_A] request_once queued (ID=0x080)
+[MASTER] RX start-intent from ECU_B (ID=0x080)
+[ECU_B] request_once queued (ID=0x080)
+[MASTER] RX start-intent from ECU_D (ID=0x123)
+[ECU_D] request_once queued (ID=0x123)
+[MASTER] RX start-intent from ECU_E (ID=0x123)
+[ECU_E] request_once queued (ID=0x123)
+[MASTER] IDLE→START_SLOT (200 ticks) initial=ECU_A,ECU_B,ECU_D,ECU_E
+[MASTER] START_SLOT→ARBITRATION contenders=ECU_A,ECU_B,ECU_D,ECU_E
+[MASTER] ARB bit: field=SOF | ECU_A:DOMINANT, ECU_B:DOMINANT, ECU_D:DOMINANT, ECU_E:DOMINANT -> BUS=DOMINANT
+[MASTER] ARB bit: field=ID | ECU_A:DOMINANT, ECU_B:DOMINANT, ECU_D:DOMINANT, ECU_E:DOMINANT -> BUS=DOMINANT
+[MASTER] ARB bit: field=ID | ECU_A:DOMINANT, ECU_B:DOMINANT, ECU_D:DOMINANT, ECU_E:DOMINANT -> BUS=DOMINANT
+[MASTER] ARB bit: field=ID | ECU_A:DOMINANT, ECU_B:DOMINANT, ECU_D:RECESSIVE, ECU_E:RECESSIVE -> BUS=DOMINANT
+[MASTER] ARB: ECU_D loses arbitration -> waits for next bus idle
+[MASTER] ARB: ECU_E loses arbitration -> waits for next bus idle
+[MASTER] ARB bit: field=ID | ECU_A:RECESSIVE, ECU_B:RECESSIVE -> BUS=RECESSIVE
+[MASTER] ARB bit: field=ID | ECU_A:DOMINANT, ECU_B:DOMINANT -> BUS=DOMINANT
+[MASTER] ARB bit: field=ID | ECU_A:DOMINANT, ECU_B:DOMINANT -> BUS=DOMINANT
+[MASTER] ARB bit: field=ID | ECU_A:DOMINANT, ECU_B:DOMINANT -> BUS=DOMINANT
+[MASTER] ARB bit: field=ID | ECU_A:DOMINANT, ECU_B:DOMINANT -> BUS=DOMINANT
+[MASTER] ARB bit: field=ID | ECU_A:DOMINANT, ECU_B:DOMINANT -> BUS=DOMINANT
+[MASTER] ARB bit: field=STUFF | ECU_A:RECESSIVE, ECU_B:RECESSIVE -> BUS=RECESSIVE
+[MASTER] ARB bit: field=ID | ECU_A:DOMINANT, ECU_B:DOMINANT -> BUS=DOMINANT
+[MASTER] ARB bit: field=ID | ECU_A:DOMINANT, ECU_B:DOMINANT -> BUS=DOMINANT
+[MASTER] ARB bit: field=RTR | ECU_A:DOMINANT, ECU_B:DOMINANT -> BUS=DOMINANT
+[MASTER] ARBITRATION TIE (same ID/RTR) -> active_senders=ECU_A,ECU_B, switching to TRANSMIT
+[MASTER] TX bit: field=IDE | ECU_A:DOMINANT, ECU_B:DOMINANT -> BUS=DOMINANT
+[MASTER] TX bit: field=R0 | ECU_A:RECESSIVE, ECU_B:RECESSIVE -> BUS=RECESSIVE
+[MASTER] TX bit: field=DLC | ECU_A:RECESSIVE, ECU_B:RECESSIVE -> BUS=RECESSIVE
+[MASTER] TX bit: field=DLC | ECU_A:DOMINANT, ECU_B:DOMINANT -> BUS=DOMINANT
+[MASTER] TX bit: field=DLC | ECU_A:DOMINANT, ECU_B:DOMINANT -> BUS=DOMINANT
+[MASTER] TX bit: field=DLC | ECU_A:DOMINANT, ECU_B:DOMINANT -> BUS=DOMINANT
+[MASTER] TX bit: field=DATA | ECU_A:DOMINANT, ECU_B:DOMINANT -> BUS=DOMINANT
+[MASTER] TX bit: field=DATA | ECU_A:DOMINANT, ECU_B:DOMINANT -> BUS=DOMINANT
+[MASTER] TX bit: field=STUFF | ECU_A:RECESSIVE, ECU_B:RECESSIVE -> BUS=RECESSIVE
+[MASTER] TX bit: field=DATA | ECU_A:DOMINANT, ECU_B:RECESSIVE -> BUS=DOMINANT
+[MASTER] ERROR: bit error reported by ECU_B (state=ERROR_ACTIVE, offender=bit_monitoring)
+[MASTER] Counter update: ECU_B.TEC=8 state=ERROR_ACTIVE
+[MASTER] ERROR_FLAG (ERROR_ACTIVE): BUS=DOMINANT (6 bits left)
+[MASTER] ERROR_FLAG (ERROR_ACTIVE): BUS=DOMINANT (5 bits left)
+[MASTER] ERROR_FLAG (ERROR_ACTIVE): BUS=DOMINANT (4 bits left)
+[MASTER] ERROR_FLAG (ERROR_ACTIVE): BUS=DOMINANT (3 bits left)
+[MASTER] ERROR_FLAG (ERROR_ACTIVE): BUS=DOMINANT (2 bits left)
+[MASTER] ERROR_FLAG (ERROR_ACTIVE): BUS=DOMINANT (1 bits left)
+[MASTER] EOF: error -> forward ERROR (ERROR_ACTIVE) only
+[MASTER] INTERFRAME -> IDLE
+[ECU_A] request_once ignored (already pending)
+[ECU_B] request_once ignored (already pending)
+[ECU_D] request_once ignored (already pending)
+[ECU_E] request_once ignored (already pending)
+[ECU_A] request_once ignored (already pending)
+[ECU_B] request_once ignored (already pending)
+[ECU_D] request_once ignored (already pending)
+[ECU_E] request_once ignored (already pending)
+[ECU_A] request_once ignored (already pending)
+[ECU_B] request_once ignored (already pending)
+[ECU_D] request_once ignored (already pending)
+[ECU_E] request_once ignored (already pending)
+
+Interrotto manualmente
+
+[FINAL STATUS]
+A:TEC=0(ERROR_ACTIVE) B:TEC=8(ERROR_ACTIVE) D:TEC=0(ERROR_ACTIVE) E:TEC=0(ERROR_ACTIVE)
+[ECU_A] STOP TEC=0 REC=1 state=ERROR_ACTIVE
+[ECU_B] STOP TEC=8 REC=0 state=ERROR_ACTIVE
+[ECU_D] STOP TEC=0 REC=1 state=ERROR_ACTIVE
+[ECU_E] STOP TEC=0 REC=1 state=ERROR_ACTIVE
+[MASTER] STOP
