@@ -1,0 +1,3093 @@
+====================================================================================================
+CAN BUS SIMULATOR - DYNAMIC ARBITRATION TEST
+====================================================================================================
+
+Configurazione:
+  - ECU con ID MINORE (priorita ALTA) -> periodo MAGGIORE (trasmette MENO spesso)
+  - ECU con ID MAGGIORE (priorita BASSA) -> periodo MINORE (trasmette PIU spesso)
+  - 2 ECU con STESSO ID -> generano COLLISION e incrementano TEC
+
+
+Scenari testati:
+  1. ECU singola che trasmette da sola
+  2. Arbitraggio tra ECU con ID diversi
+  3. Collision tra ECU con stesso ID
+  4. ECU che vuole trasmettere mentre un'altra sta trasmettendo
+
+
+CORREZIONI IMPLEMENTATE:
+  - START_SLOT eliminato: tutte le ECU PENDING partecipano SUBITO all'arbitraggio
+  - Collision: ENTRAMBE le ECU incrementano TEC di +8
+  - ERROR FLAG ACTIVE: 6 bit DOMINANT (TEC < 128)
+  - ERROR FLAG PASSIVE: 8 bit RECESSIVE (TEC >= 128)
+  - TEC -= 1 dopo trasmissione con successo
+  - ERROR FLAG PASSIVE: +8 errore, -1 successo = +7 netto
+
+[MASTER] START
+ECU configurate:
+  - ECU_A: ID=0x050 (priorita ALTA)        -> TX ogni 6.0s  (start: 0.1s)
+  - ECU_B: ID=0x100 (priorita MEDIA-ALTA)  -> TX ogni 8.0s  (start: 2.0s)
+  - ECU_C: ID=0x200 (priorita MEDIA-BASSA) -> TX ogni 10.0s (start: 2.0s)
+  - ECU_D: ID=0x300 (priorita BASSA)       -> TX ogni 12.0s (start: 4.0s)
+  - ECU_E: ID=0x300 (COLLISION con D!)     -> TX ogni 14.0s (start: 4.0s)
+
+====================================================================================================
+[ECU_A] START slave_id=1 ID=0x050 period=6.00s
+[ECU_B] START slave_id=2 ID=0x100 period=8.00s
+[ECU_C] START slave_id=3 ID=0x200 period=10.00s
+[ECU_D] START slave_id=4 ID=0x300 period=12.00s
+[ECU_E] START slave_id=5 ID=0x300 period=14.00s
+
+Simulazione avviata! (Ctrl+C per fermare)
+
+[ECU_A] VUOLE TRASMETTERE (ID=0x050) TEC=0 REC=0 State=ERROR_ACTIVE
+
+[MASTER] IDLE->ARBITRATION | Contenders: ECU_A
+  [ARB] SOF          | ECU_A=0 -> BUS=0
+[MASTER] WINNER: ECU_A (ID=0x050) -> TRANSMIT
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  ID           | ECU_A=1
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=1
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  RTR          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  IDE          | ECU_A=0
+  [TX]  R0           | ECU_A=1
+  [TX]  DLC          | ECU_A=1
+  [TX]  DLC          | ECU_A=0
+  [TX]  DLC          | ECU_A=0
+  [TX]  DLC          | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC_DELIM    | ECU_A=1
+  [TX]  ACK_SLOT     | ECU_A=1
+  [TX]  ACK_DELIM    | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+[MASTER] Frame OK: ID=0x050 data=0101010101010101
+[MASTER] ECU_A: TEC=0 (-1 per successo) State=ERROR_ACTIVE
+[ECU_C] VUOLE TRASMETTERE (ID=0x200) TEC=0 REC=0 State=ERROR_ACTIVE
+
+[MASTER] IDLE->ARBITRATION | Contenders: ECU_C
+[ECU_B] VUOLE TRASMETTERE (ID=0x100) TEC=0 REC=0 State=ERROR_ACTIVE
+  [ARB] SOF          | ECU_C=0 -> BUS=0
+[MASTER] WINNER: ECU_C (ID=0x200) -> TRANSMIT
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=1
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  RTR          | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  IDE          | ECU_C=0
+  [TX]  R0           | ECU_C=1
+  [TX]  DLC          | ECU_C=1
+  [TX]  DLC          | ECU_C=0
+  [TX]  DLC          | ECU_C=0
+  [TX]  DLC          | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC_DELIM    | ECU_C=1
+  [TX]  ACK_SLOT     | ECU_C=1
+  [TX]  ACK_DELIM    | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  INTERMISSION | ECU_C=1
+  [TX]  INTERMISSION | ECU_C=1
+  [TX]  INTERMISSION | ECU_C=1
+[MASTER] Frame OK: ID=0x200 data=0303030303030303
+[MASTER] ECU_C: TEC=0 (-1 per successo) State=ERROR_ACTIVE
+
+====================================================================================================
+STATUS BUS (IDLE)
+====================================================================================================
+  [ECU_A ] ID=0x050 | TEC=  0 REC=  0 | ERROR_ACTIVE  | Attende 3.10s
+  [ECU_B ] ID=0x100 | TEC=  0 REC=  0 | ERROR_ACTIVE  | PENDING
+  [ECU_C ] ID=0x200 | TEC=  0 REC=  0 | ERROR_ACTIVE  | Attende 9.01s
+  [ECU_D ] ID=0x300 | TEC=  0 REC=  0 | ERROR_ACTIVE  | Attende 1.00s
+  [ECU_E ] ID=0x300 | TEC=  0 REC=  0 | ERROR_ACTIVE  | Attende 1.00s
+====================================================================================================
+
+[ECU_D] VUOLE TRASMETTERE (ID=0x300) TEC=0 REC=0 State=ERROR_ACTIVE
+[ECU_E] VUOLE TRASMETTERE (ID=0x300) TEC=0 REC=0 State=ERROR_ACTIVE
+
+[MASTER] IDLE->ARBITRATION | Contenders: ECU_D, ECU_E
+  [ARB] SOF          | ECU_D=0 | ECU_E=0 -> BUS=0
+  [ARB] ID           | ECU_D=0 | ECU_E=0 -> BUS=0
+  [ARB] ID           | ECU_D=1 | ECU_E=1 -> BUS=1
+  [ARB] ID           | ECU_D=1 | ECU_E=1 -> BUS=1
+  [ARB] ID           | ECU_D=0 | ECU_E=0 -> BUS=0
+  [ARB] ID           | ECU_D=0 | ECU_E=0 -> BUS=0
+  [ARB] ID           | ECU_D=0 | ECU_E=0 -> BUS=0
+  [ARB] ID           | ECU_D=0 | ECU_E=0 -> BUS=0
+  [ARB] ID           | ECU_D=0 | ECU_E=0 -> BUS=0
+  [ARB] STUFF        | ECU_D=1 | ECU_E=1 -> BUS=1
+  [ARB] ID           | ECU_D=0 | ECU_E=0 -> BUS=0
+  [ARB] ID           | ECU_D=0 | ECU_E=0 -> BUS=0
+  [ARB] ID           | ECU_D=0 | ECU_E=0 -> BUS=0
+  [ARB] RTR          | ECU_D=0 | ECU_E=0 -> BUS=0
+[MASTER] COLLISION! Stesso ID/RTR: ECU_D,ECU_E -> TRANSMIT (errore imminente)
+  [TX]  IDE          | ECU_D=0 | ECU_E=0 -> BUS=0
+  [TX]  STUFF        | ECU_D=1 | ECU_E=1 -> BUS=1
+  [TX]  R0           | ECU_D=1 | ECU_E=1 -> BUS=1
+  [TX]  DLC          | ECU_D=1 | ECU_E=1 -> BUS=1
+  [TX]  DLC          | ECU_D=0 | ECU_E=0 -> BUS=0
+  [TX]  DLC          | ECU_D=0 | ECU_E=0 -> BUS=0
+  [TX]  DLC          | ECU_D=0 | ECU_E=0 -> BUS=0
+  [TX]  DATA         | ECU_D=0 | ECU_E=0 -> BUS=0
+  [TX]  DATA         | ECU_D=0 | ECU_E=0 -> BUS=0
+  [TX]  STUFF        | ECU_D=1 | ECU_E=1 -> BUS=1
+  [TX]  DATA         | ECU_D=0 | ECU_E=0 -> BUS=0
+  [TX]  DATA         | ECU_D=0 | ECU_E=0 -> BUS=0
+  [TX]  DATA         | ECU_D=0 | ECU_E=0 -> BUS=0
+  [TX]  DATA         | ECU_D=1 | ECU_E=1 -> BUS=1
+  [TX]  DATA         | ECU_D=0 | ECU_E=0 -> BUS=0
+  [TX]  DATA         | ECU_D=0 | ECU_E=1 -> BUS=0
+
+[MASTER] BIT ERROR rilevato da ECU_E (offender=bit_monitoring)
+[MASTER] ECU coinvolte nell'errore: ECU_D, ECU_E
+[MASTER] ECU_D: TEC=8 (+8 per errore) State=ERROR_ACTIVE
+[MASTER] ECU_E: TEC=8 (+8 per errore) State=ERROR_ACTIVE
+  [ERR] ERROR_FLAG_ACTIVE | ECU_D, ECU_E -> BUS=0 (bit 1/6)
+  [ERR] ERROR_FLAG_ACTIVE | ECU_D, ECU_E -> BUS=0 (bit 2/6)
+  [ERR] ERROR_FLAG_ACTIVE | ECU_D, ECU_E -> BUS=0 (bit 3/6)
+  [ERR] ERROR_FLAG_ACTIVE | ECU_D, ECU_E -> BUS=0 (bit 4/6)
+  [ERR] ERROR_FLAG_ACTIVE | ECU_D, ECU_E -> BUS=0 (bit 5/6)
+  [ERR] ERROR_FLAG_ACTIVE | ECU_D, ECU_E -> BUS=0 (bit 6/6)
+  [ERR] ERROR_DELIM | BUS=1 (bit 1/8)
+  [ERR] ERROR_DELIM | BUS=1 (bit 2/8)
+  [ERR] ERROR_DELIM | BUS=1 (bit 3/8)
+  [ERR] ERROR_DELIM | BUS=1 (bit 4/8)
+  [ERR] ERROR_DELIM | BUS=1 (bit 5/8)
+  [ERR] ERROR_DELIM | BUS=1 (bit 6/8)
+  [ERR] ERROR_DELIM | BUS=1 (bit 7/8)
+  [ERR] ERROR_DELIM | BUS=1 (bit 8/8)
+
+====================================================================================================
+STATUS BUS (IDLE)
+====================================================================================================
+  [ECU_A ] ID=0x050 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 0.10s
+  [ECU_B ] ID=0x100 | TEC=  0 REC=  1 | ERROR_ACTIVE  | PENDING
+  [ECU_C ] ID=0x200 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 6.01s
+  [ECU_D ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+  [ECU_E ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+====================================================================================================
+
+[ECU_A] VUOLE TRASMETTERE (ID=0x050) TEC=0 REC=1 State=ERROR_ACTIVE
+
+[MASTER] IDLE->ARBITRATION | Contenders: ECU_A
+  [ARB] SOF          | ECU_A=0 -> BUS=0
+[MASTER] WINNER: ECU_A (ID=0x050) -> TRANSMIT
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  ID           | ECU_A=1
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=1
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  RTR          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  IDE          | ECU_A=0
+  [TX]  R0           | ECU_A=1
+  [TX]  DLC          | ECU_A=1
+  [TX]  DLC          | ECU_A=0
+  [TX]  DLC          | ECU_A=0
+  [TX]  DLC          | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC_DELIM    | ECU_A=1
+  [TX]  ACK_SLOT     | ECU_A=1
+  [TX]  ACK_DELIM    | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+[MASTER] Frame OK: ID=0x050 data=0101010101010101
+[MASTER] ECU_A: TEC=0 (-1 per successo) State=ERROR_ACTIVE
+
+====================================================================================================
+STATUS BUS (IDLE)
+====================================================================================================
+  [ECU_A ] ID=0x050 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 3.13s
+  [ECU_B ] ID=0x100 | TEC=  0 REC=  1 | ERROR_ACTIVE  | PENDING
+  [ECU_C ] ID=0x200 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 3.01s
+  [ECU_D ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+  [ECU_E ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+====================================================================================================
+
+
+====================================================================================================
+STATUS BUS (IDLE)
+====================================================================================================
+  [ECU_A ] ID=0x050 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 0.13s
+  [ECU_B ] ID=0x100 | TEC=  0 REC=  1 | ERROR_ACTIVE  | PENDING
+  [ECU_C ] ID=0x200 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 0.01s
+  [ECU_D ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+  [ECU_E ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+====================================================================================================
+
+[ECU_C] VUOLE TRASMETTERE (ID=0x200) TEC=0 REC=1 State=ERROR_ACTIVE
+
+[MASTER] IDLE->ARBITRATION | Contenders: ECU_C
+  [ARB] SOF          | ECU_C=0 -> BUS=0
+[MASTER] WINNER: ECU_C (ID=0x200) -> TRANSMIT
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=1
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  RTR          | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  IDE          | ECU_C=0
+  [TX]  R0           | ECU_C=1
+  [TX]  DLC          | ECU_C=1
+  [TX]  DLC          | ECU_C=0
+  [TX]  DLC          | ECU_C=0
+  [TX]  DLC          | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC_DELIM    | ECU_C=1
+  [TX]  ACK_SLOT     | ECU_C=1
+  [TX]  ACK_DELIM    | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  INTERMISSION | ECU_C=1
+  [TX]  INTERMISSION | ECU_C=1
+  [TX]  INTERMISSION | ECU_C=1
+[MASTER] Frame OK: ID=0x200 data=0303030303030303
+[MASTER] ECU_C: TEC=0 (-1 per successo) State=ERROR_ACTIVE
+[ECU_A] VUOLE TRASMETTERE (ID=0x050) TEC=0 REC=1 State=ERROR_ACTIVE
+
+[MASTER] IDLE->ARBITRATION | Contenders: ECU_A
+  [ARB] SOF          | ECU_A=0 -> BUS=0
+[MASTER] WINNER: ECU_A (ID=0x050) -> TRANSMIT
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  ID           | ECU_A=1
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=1
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  RTR          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  IDE          | ECU_A=0
+  [TX]  R0           | ECU_A=1
+  [TX]  DLC          | ECU_A=1
+  [TX]  DLC          | ECU_A=0
+  [TX]  DLC          | ECU_A=0
+  [TX]  DLC          | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC_DELIM    | ECU_A=1
+  [TX]  ACK_SLOT     | ECU_A=1
+  [TX]  ACK_DELIM    | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+[MASTER] Frame OK: ID=0x050 data=0101010101010101
+[MASTER] ECU_A: TEC=0 (-1 per successo) State=ERROR_ACTIVE
+
+====================================================================================================
+STATUS BUS (IDLE)
+====================================================================================================
+  [ECU_A ] ID=0x050 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 3.17s
+  [ECU_B ] ID=0x100 | TEC=  0 REC=  1 | ERROR_ACTIVE  | PENDING
+  [ECU_C ] ID=0x200 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 7.02s
+  [ECU_D ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+  [ECU_E ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+====================================================================================================
+
+
+====================================================================================================
+STATUS BUS (IDLE)
+====================================================================================================
+  [ECU_A ] ID=0x050 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 0.17s
+  [ECU_B ] ID=0x100 | TEC=  0 REC=  1 | ERROR_ACTIVE  | PENDING
+  [ECU_C ] ID=0x200 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 4.02s
+  [ECU_D ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+  [ECU_E ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+====================================================================================================
+
+[ECU_A] VUOLE TRASMETTERE (ID=0x050) TEC=0 REC=1 State=ERROR_ACTIVE
+
+[MASTER] IDLE->ARBITRATION | Contenders: ECU_A
+  [ARB] SOF          | ECU_A=0 -> BUS=0
+[MASTER] WINNER: ECU_A (ID=0x050) -> TRANSMIT
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  ID           | ECU_A=1
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=1
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  RTR          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  IDE          | ECU_A=0
+  [TX]  R0           | ECU_A=1
+  [TX]  DLC          | ECU_A=1
+  [TX]  DLC          | ECU_A=0
+  [TX]  DLC          | ECU_A=0
+  [TX]  DLC          | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC_DELIM    | ECU_A=1
+  [TX]  ACK_SLOT     | ECU_A=1
+  [TX]  ACK_DELIM    | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+[MASTER] Frame OK: ID=0x050 data=0101010101010101
+[MASTER] ECU_A: TEC=0 (-1 per successo) State=ERROR_ACTIVE
+
+====================================================================================================
+STATUS BUS (IDLE)
+====================================================================================================
+  [ECU_A ] ID=0x050 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 3.20s
+  [ECU_B ] ID=0x100 | TEC=  0 REC=  1 | ERROR_ACTIVE  | PENDING
+  [ECU_C ] ID=0x200 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 1.02s
+  [ECU_D ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+  [ECU_E ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+====================================================================================================
+
+[ECU_C] VUOLE TRASMETTERE (ID=0x200) TEC=0 REC=1 State=ERROR_ACTIVE
+
+[MASTER] IDLE->ARBITRATION | Contenders: ECU_C
+  [ARB] SOF          | ECU_C=0 -> BUS=0
+[MASTER] WINNER: ECU_C (ID=0x200) -> TRANSMIT
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=1
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  RTR          | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  IDE          | ECU_C=0
+  [TX]  R0           | ECU_C=1
+  [TX]  DLC          | ECU_C=1
+  [TX]  DLC          | ECU_C=0
+  [TX]  DLC          | ECU_C=0
+  [TX]  DLC          | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC_DELIM    | ECU_C=1
+  [TX]  ACK_SLOT     | ECU_C=1
+  [TX]  ACK_DELIM    | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  INTERMISSION | ECU_C=1
+  [TX]  INTERMISSION | ECU_C=1
+  [TX]  INTERMISSION | ECU_C=1
+[MASTER] Frame OK: ID=0x200 data=0303030303030303
+[MASTER] ECU_C: TEC=0 (-1 per successo) State=ERROR_ACTIVE
+
+====================================================================================================
+STATUS BUS (IDLE)
+====================================================================================================
+  [ECU_A ] ID=0x050 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 0.20s
+  [ECU_B ] ID=0x100 | TEC=  0 REC=  1 | ERROR_ACTIVE  | PENDING
+  [ECU_C ] ID=0x200 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 8.03s
+  [ECU_D ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+  [ECU_E ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+====================================================================================================
+
+[ECU_A] VUOLE TRASMETTERE (ID=0x050) TEC=0 REC=1 State=ERROR_ACTIVE
+
+[MASTER] IDLE->ARBITRATION | Contenders: ECU_A
+  [ARB] SOF          | ECU_A=0 -> BUS=0
+[MASTER] WINNER: ECU_A (ID=0x050) -> TRANSMIT
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  ID           | ECU_A=1
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=1
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  RTR          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  IDE          | ECU_A=0
+  [TX]  R0           | ECU_A=1
+  [TX]  DLC          | ECU_A=1
+  [TX]  DLC          | ECU_A=0
+  [TX]  DLC          | ECU_A=0
+  [TX]  DLC          | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC_DELIM    | ECU_A=1
+  [TX]  ACK_SLOT     | ECU_A=1
+  [TX]  ACK_DELIM    | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+[MASTER] Frame OK: ID=0x050 data=0101010101010101
+[MASTER] ECU_A: TEC=0 (-1 per successo) State=ERROR_ACTIVE
+
+====================================================================================================
+STATUS BUS (IDLE)
+====================================================================================================
+  [ECU_A ] ID=0x050 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 3.24s
+  [ECU_B ] ID=0x100 | TEC=  0 REC=  1 | ERROR_ACTIVE  | PENDING
+  [ECU_C ] ID=0x200 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 5.02s
+  [ECU_D ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+  [ECU_E ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+====================================================================================================
+
+
+====================================================================================================
+STATUS BUS (IDLE)
+====================================================================================================
+  [ECU_A ] ID=0x050 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 0.24s
+  [ECU_B ] ID=0x100 | TEC=  0 REC=  1 | ERROR_ACTIVE  | PENDING
+  [ECU_C ] ID=0x200 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 2.02s
+  [ECU_D ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+  [ECU_E ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+====================================================================================================
+
+[ECU_A] VUOLE TRASMETTERE (ID=0x050) TEC=0 REC=1 State=ERROR_ACTIVE
+
+[MASTER] IDLE->ARBITRATION | Contenders: ECU_A
+  [ARB] SOF          | ECU_A=0 -> BUS=0
+[MASTER] WINNER: ECU_A (ID=0x050) -> TRANSMIT
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  ID           | ECU_A=1
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=1
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  RTR          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  IDE          | ECU_A=0
+  [TX]  R0           | ECU_A=1
+  [TX]  DLC          | ECU_A=1
+  [TX]  DLC          | ECU_A=0
+  [TX]  DLC          | ECU_A=0
+  [TX]  DLC          | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC_DELIM    | ECU_A=1
+  [TX]  ACK_SLOT     | ECU_A=1
+  [TX]  ACK_DELIM    | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+[MASTER] Frame OK: ID=0x050 data=0101010101010101
+[MASTER] ECU_A: TEC=0 (-1 per successo) State=ERROR_ACTIVE
+[ECU_C] VUOLE TRASMETTERE (ID=0x200) TEC=0 REC=1 State=ERROR_ACTIVE
+
+[MASTER] IDLE->ARBITRATION | Contenders: ECU_C
+  [ARB] SOF          | ECU_C=0 -> BUS=0
+[MASTER] WINNER: ECU_C (ID=0x200) -> TRANSMIT
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=1
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  RTR          | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  IDE          | ECU_C=0
+  [TX]  R0           | ECU_C=1
+  [TX]  DLC          | ECU_C=1
+  [TX]  DLC          | ECU_C=0
+  [TX]  DLC          | ECU_C=0
+  [TX]  DLC          | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC_DELIM    | ECU_C=1
+  [TX]  ACK_SLOT     | ECU_C=1
+  [TX]  ACK_DELIM    | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  INTERMISSION | ECU_C=1
+  [TX]  INTERMISSION | ECU_C=1
+  [TX]  INTERMISSION | ECU_C=1
+[MASTER] Frame OK: ID=0x200 data=0303030303030303
+[MASTER] ECU_C: TEC=0 (-1 per successo) State=ERROR_ACTIVE
+
+====================================================================================================
+STATUS BUS (IDLE)
+====================================================================================================
+  [ECU_A ] ID=0x050 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 3.28s
+  [ECU_B ] ID=0x100 | TEC=  0 REC=  1 | ERROR_ACTIVE  | PENDING
+  [ECU_C ] ID=0x200 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 9.04s
+  [ECU_D ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+  [ECU_E ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+====================================================================================================
+
+
+====================================================================================================
+STATUS BUS (IDLE)
+====================================================================================================
+  [ECU_A ] ID=0x050 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 0.28s
+  [ECU_B ] ID=0x100 | TEC=  0 REC=  1 | ERROR_ACTIVE  | PENDING
+  [ECU_C ] ID=0x200 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 6.04s
+  [ECU_D ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+  [ECU_E ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+====================================================================================================
+
+[ECU_A] VUOLE TRASMETTERE (ID=0x050) TEC=0 REC=1 State=ERROR_ACTIVE
+
+[MASTER] IDLE->ARBITRATION | Contenders: ECU_A
+  [ARB] SOF          | ECU_A=0 -> BUS=0
+[MASTER] WINNER: ECU_A (ID=0x050) -> TRANSMIT
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  ID           | ECU_A=1
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=1
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  RTR          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  IDE          | ECU_A=0
+  [TX]  R0           | ECU_A=1
+  [TX]  DLC          | ECU_A=1
+  [TX]  DLC          | ECU_A=0
+  [TX]  DLC          | ECU_A=0
+  [TX]  DLC          | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC_DELIM    | ECU_A=1
+  [TX]  ACK_SLOT     | ECU_A=1
+  [TX]  ACK_DELIM    | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+[MASTER] Frame OK: ID=0x050 data=0101010101010101
+[MASTER] ECU_A: TEC=0 (-1 per successo) State=ERROR_ACTIVE
+
+====================================================================================================
+STATUS BUS (IDLE)
+====================================================================================================
+  [ECU_A ] ID=0x050 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 3.31s
+  [ECU_B ] ID=0x100 | TEC=  0 REC=  1 | ERROR_ACTIVE  | PENDING
+  [ECU_C ] ID=0x200 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 3.04s
+  [ECU_D ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+  [ECU_E ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+====================================================================================================
+
+
+====================================================================================================
+STATUS BUS (IDLE)
+====================================================================================================
+  [ECU_A ] ID=0x050 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 0.31s
+  [ECU_B ] ID=0x100 | TEC=  0 REC=  1 | ERROR_ACTIVE  | PENDING
+  [ECU_C ] ID=0x200 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 0.04s
+  [ECU_D ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+  [ECU_E ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+====================================================================================================
+
+[ECU_C] VUOLE TRASMETTERE (ID=0x200) TEC=0 REC=1 State=ERROR_ACTIVE
+
+[MASTER] IDLE->ARBITRATION | Contenders: ECU_C
+  [ARB] SOF          | ECU_C=0 -> BUS=0
+[MASTER] WINNER: ECU_C (ID=0x200) -> TRANSMIT
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=1
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  RTR          | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  IDE          | ECU_C=0
+  [TX]  R0           | ECU_C=1
+  [TX]  DLC          | ECU_C=1
+  [TX]  DLC          | ECU_C=0
+  [TX]  DLC          | ECU_C=0
+  [TX]  DLC          | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC_DELIM    | ECU_C=1
+  [TX]  ACK_SLOT     | ECU_C=1
+  [TX]  ACK_DELIM    | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  INTERMISSION | ECU_C=1
+  [TX]  INTERMISSION | ECU_C=1
+  [TX]  INTERMISSION | ECU_C=1
+[MASTER] Frame OK: ID=0x200 data=0303030303030303
+[MASTER] ECU_C: TEC=0 (-1 per successo) State=ERROR_ACTIVE
+[ECU_A] VUOLE TRASMETTERE (ID=0x050) TEC=0 REC=1 State=ERROR_ACTIVE
+
+[MASTER] IDLE->ARBITRATION | Contenders: ECU_A
+  [ARB] SOF          | ECU_A=0 -> BUS=0
+[MASTER] WINNER: ECU_A (ID=0x050) -> TRANSMIT
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  ID           | ECU_A=1
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=1
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  RTR          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  IDE          | ECU_A=0
+  [TX]  R0           | ECU_A=1
+  [TX]  DLC          | ECU_A=1
+  [TX]  DLC          | ECU_A=0
+  [TX]  DLC          | ECU_A=0
+  [TX]  DLC          | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC_DELIM    | ECU_A=1
+  [TX]  ACK_SLOT     | ECU_A=1
+  [TX]  ACK_DELIM    | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+[MASTER] Frame OK: ID=0x050 data=0101010101010101
+[MASTER] ECU_A: TEC=0 (-1 per successo) State=ERROR_ACTIVE
+
+====================================================================================================
+STATUS BUS (IDLE)
+====================================================================================================
+  [ECU_A ] ID=0x050 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 3.34s
+  [ECU_B ] ID=0x100 | TEC=  0 REC=  1 | ERROR_ACTIVE  | PENDING
+  [ECU_C ] ID=0x200 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 7.04s
+  [ECU_D ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+  [ECU_E ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+====================================================================================================
+
+
+====================================================================================================
+STATUS BUS (IDLE)
+====================================================================================================
+  [ECU_A ] ID=0x050 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 0.34s
+  [ECU_B ] ID=0x100 | TEC=  0 REC=  1 | ERROR_ACTIVE  | PENDING
+  [ECU_C ] ID=0x200 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 4.04s
+  [ECU_D ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+  [ECU_E ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+====================================================================================================
+
+[ECU_A] VUOLE TRASMETTERE (ID=0x050) TEC=0 REC=1 State=ERROR_ACTIVE
+
+[MASTER] IDLE->ARBITRATION | Contenders: ECU_A
+  [ARB] SOF          | ECU_A=0 -> BUS=0
+[MASTER] WINNER: ECU_A (ID=0x050) -> TRANSMIT
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  ID           | ECU_A=1
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=1
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  RTR          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  IDE          | ECU_A=0
+  [TX]  R0           | ECU_A=1
+  [TX]  DLC          | ECU_A=1
+  [TX]  DLC          | ECU_A=0
+  [TX]  DLC          | ECU_A=0
+  [TX]  DLC          | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC_DELIM    | ECU_A=1
+  [TX]  ACK_SLOT     | ECU_A=1
+  [TX]  ACK_DELIM    | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+[MASTER] Frame OK: ID=0x050 data=0101010101010101
+[MASTER] ECU_A: TEC=0 (-1 per successo) State=ERROR_ACTIVE
+
+====================================================================================================
+STATUS BUS (IDLE)
+====================================================================================================
+  [ECU_A ] ID=0x050 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 3.37s
+  [ECU_B ] ID=0x100 | TEC=  0 REC=  1 | ERROR_ACTIVE  | PENDING
+  [ECU_C ] ID=0x200 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 1.04s
+  [ECU_D ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+  [ECU_E ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+====================================================================================================
+
+[ECU_C] VUOLE TRASMETTERE (ID=0x200) TEC=0 REC=1 State=ERROR_ACTIVE
+
+[MASTER] IDLE->ARBITRATION | Contenders: ECU_C
+  [ARB] SOF          | ECU_C=0 -> BUS=0
+[MASTER] WINNER: ECU_C (ID=0x200) -> TRANSMIT
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=1
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  RTR          | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  IDE          | ECU_C=0
+  [TX]  R0           | ECU_C=1
+  [TX]  DLC          | ECU_C=1
+  [TX]  DLC          | ECU_C=0
+  [TX]  DLC          | ECU_C=0
+  [TX]  DLC          | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC_DELIM    | ECU_C=1
+  [TX]  ACK_SLOT     | ECU_C=1
+  [TX]  ACK_DELIM    | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  INTERMISSION | ECU_C=1
+  [TX]  INTERMISSION | ECU_C=1
+  [TX]  INTERMISSION | ECU_C=1
+[MASTER] Frame OK: ID=0x200 data=0303030303030303
+[MASTER] ECU_C: TEC=0 (-1 per successo) State=ERROR_ACTIVE
+
+====================================================================================================
+STATUS BUS (IDLE)
+====================================================================================================
+  [ECU_A ] ID=0x050 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 0.37s
+  [ECU_B ] ID=0x100 | TEC=  0 REC=  1 | ERROR_ACTIVE  | PENDING
+  [ECU_C ] ID=0x200 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 8.09s
+  [ECU_D ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+  [ECU_E ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+====================================================================================================
+
+[ECU_A] VUOLE TRASMETTERE (ID=0x050) TEC=0 REC=1 State=ERROR_ACTIVE
+
+[MASTER] IDLE->ARBITRATION | Contenders: ECU_A
+  [ARB] SOF          | ECU_A=0 -> BUS=0
+[MASTER] WINNER: ECU_A (ID=0x050) -> TRANSMIT
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  ID           | ECU_A=1
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=1
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  RTR          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  IDE          | ECU_A=0
+  [TX]  R0           | ECU_A=1
+  [TX]  DLC          | ECU_A=1
+  [TX]  DLC          | ECU_A=0
+  [TX]  DLC          | ECU_A=0
+  [TX]  DLC          | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC_DELIM    | ECU_A=1
+  [TX]  ACK_SLOT     | ECU_A=1
+  [TX]  ACK_DELIM    | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+[MASTER] Frame OK: ID=0x050 data=0101010101010101
+[MASTER] ECU_A: TEC=0 (-1 per successo) State=ERROR_ACTIVE
+
+====================================================================================================
+STATUS BUS (IDLE)
+====================================================================================================
+  [ECU_A ] ID=0x050 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 3.39s
+  [ECU_B ] ID=0x100 | TEC=  0 REC=  1 | ERROR_ACTIVE  | PENDING
+  [ECU_C ] ID=0x200 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 5.09s
+  [ECU_D ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+  [ECU_E ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+====================================================================================================
+
+
+====================================================================================================
+STATUS BUS (IDLE)
+====================================================================================================
+  [ECU_A ] ID=0x050 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 0.39s
+  [ECU_B ] ID=0x100 | TEC=  0 REC=  1 | ERROR_ACTIVE  | PENDING
+  [ECU_C ] ID=0x200 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 2.09s
+  [ECU_D ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+  [ECU_E ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+====================================================================================================
+
+[ECU_A] VUOLE TRASMETTERE (ID=0x050) TEC=0 REC=1 State=ERROR_ACTIVE
+
+[MASTER] IDLE->ARBITRATION | Contenders: ECU_A
+  [ARB] SOF          | ECU_A=0 -> BUS=0
+[MASTER] WINNER: ECU_A (ID=0x050) -> TRANSMIT
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  ID           | ECU_A=1
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=1
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  RTR          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  IDE          | ECU_A=0
+  [TX]  R0           | ECU_A=1
+  [TX]  DLC          | ECU_A=1
+  [TX]  DLC          | ECU_A=0
+  [TX]  DLC          | ECU_A=0
+  [TX]  DLC          | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC_DELIM    | ECU_A=1
+  [TX]  ACK_SLOT     | ECU_A=1
+  [TX]  ACK_DELIM    | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+[MASTER] Frame OK: ID=0x050 data=0101010101010101
+[MASTER] ECU_A: TEC=0 (-1 per successo) State=ERROR_ACTIVE
+[ECU_C] VUOLE TRASMETTERE (ID=0x200) TEC=0 REC=1 State=ERROR_ACTIVE
+
+[MASTER] IDLE->ARBITRATION | Contenders: ECU_C
+  [ARB] SOF          | ECU_C=0 -> BUS=0
+[MASTER] WINNER: ECU_C (ID=0x200) -> TRANSMIT
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=1
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  RTR          | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  IDE          | ECU_C=0
+  [TX]  R0           | ECU_C=1
+  [TX]  DLC          | ECU_C=1
+  [TX]  DLC          | ECU_C=0
+  [TX]  DLC          | ECU_C=0
+  [TX]  DLC          | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC_DELIM    | ECU_C=1
+  [TX]  ACK_SLOT     | ECU_C=1
+  [TX]  ACK_DELIM    | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  INTERMISSION | ECU_C=1
+  [TX]  INTERMISSION | ECU_C=1
+  [TX]  INTERMISSION | ECU_C=1
+[MASTER] Frame OK: ID=0x200 data=0303030303030303
+[MASTER] ECU_C: TEC=0 (-1 per successo) State=ERROR_ACTIVE
+
+====================================================================================================
+STATUS BUS (IDLE)
+====================================================================================================
+  [ECU_A ] ID=0x050 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 3.42s
+  [ECU_B ] ID=0x100 | TEC=  0 REC=  1 | ERROR_ACTIVE  | PENDING
+  [ECU_C ] ID=0x200 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 9.13s
+  [ECU_D ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+  [ECU_E ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+====================================================================================================
+
+
+====================================================================================================
+STATUS BUS (IDLE)
+====================================================================================================
+  [ECU_A ] ID=0x050 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 0.42s
+  [ECU_B ] ID=0x100 | TEC=  0 REC=  1 | ERROR_ACTIVE  | PENDING
+  [ECU_C ] ID=0x200 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 6.13s
+  [ECU_D ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+  [ECU_E ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+====================================================================================================
+
+[ECU_A] VUOLE TRASMETTERE (ID=0x050) TEC=0 REC=1 State=ERROR_ACTIVE
+
+[MASTER] IDLE->ARBITRATION | Contenders: ECU_A
+  [ARB] SOF          | ECU_A=0 -> BUS=0
+[MASTER] WINNER: ECU_A (ID=0x050) -> TRANSMIT
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  ID           | ECU_A=1
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=1
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  RTR          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  IDE          | ECU_A=0
+  [TX]  R0           | ECU_A=1
+  [TX]  DLC          | ECU_A=1
+  [TX]  DLC          | ECU_A=0
+  [TX]  DLC          | ECU_A=0
+  [TX]  DLC          | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC_DELIM    | ECU_A=1
+  [TX]  ACK_SLOT     | ECU_A=1
+  [TX]  ACK_DELIM    | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+[MASTER] Frame OK: ID=0x050 data=0101010101010101
+[MASTER] ECU_A: TEC=0 (-1 per successo) State=ERROR_ACTIVE
+
+====================================================================================================
+STATUS BUS (IDLE)
+====================================================================================================
+  [ECU_A ] ID=0x050 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 3.45s
+  [ECU_B ] ID=0x100 | TEC=  0 REC=  1 | ERROR_ACTIVE  | PENDING
+  [ECU_C ] ID=0x200 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 3.13s
+  [ECU_D ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+  [ECU_E ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+====================================================================================================
+
+
+====================================================================================================
+STATUS BUS (IDLE)
+====================================================================================================
+  [ECU_A ] ID=0x050 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 0.45s
+  [ECU_B ] ID=0x100 | TEC=  0 REC=  1 | ERROR_ACTIVE  | PENDING
+  [ECU_C ] ID=0x200 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 0.13s
+  [ECU_D ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+  [ECU_E ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+====================================================================================================
+
+[ECU_C] VUOLE TRASMETTERE (ID=0x200) TEC=0 REC=1 State=ERROR_ACTIVE
+
+[MASTER] IDLE->ARBITRATION | Contenders: ECU_C
+  [ARB] SOF          | ECU_C=0 -> BUS=0
+[MASTER] WINNER: ECU_C (ID=0x200) -> TRANSMIT
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=1
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  ID           | ECU_C=0
+  [TX]  RTR          | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  IDE          | ECU_C=0
+  [TX]  R0           | ECU_C=1
+  [TX]  DLC          | ECU_C=1
+  [TX]  DLC          | ECU_C=0
+  [TX]  DLC          | ECU_C=0
+  [TX]  DLC          | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=0
+  [TX]  STUFF        | ECU_C=1
+  [TX]  DATA         | ECU_C=0
+  [TX]  DATA         | ECU_C=1
+  [TX]  DATA         | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=1
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC          | ECU_C=0
+  [TX]  CRC_DELIM    | ECU_C=1
+  [TX]  ACK_SLOT     | ECU_C=1
+  [TX]  ACK_DELIM    | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  EOF          | ECU_C=1
+  [TX]  INTERMISSION | ECU_C=1
+  [TX]  INTERMISSION | ECU_C=1
+  [TX]  INTERMISSION | ECU_C=1
+[MASTER] Frame OK: ID=0x200 data=0303030303030303
+[MASTER] ECU_C: TEC=0 (-1 per successo) State=ERROR_ACTIVE
+[ECU_A] VUOLE TRASMETTERE (ID=0x050) TEC=0 REC=1 State=ERROR_ACTIVE
+
+[MASTER] IDLE->ARBITRATION | Contenders: ECU_A
+  [ARB] SOF          | ECU_A=0 -> BUS=0
+[MASTER] WINNER: ECU_A (ID=0x050) -> TRANSMIT
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  ID           | ECU_A=1
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=1
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  ID           | ECU_A=0
+  [TX]  RTR          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  IDE          | ECU_A=0
+  [TX]  R0           | ECU_A=1
+  [TX]  DLC          | ECU_A=1
+  [TX]  DLC          | ECU_A=0
+  [TX]  DLC          | ECU_A=0
+  [TX]  DLC          | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=0
+  [TX]  DATA         | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=0
+  [TX]  STUFF        | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC          | ECU_A=0
+  [TX]  CRC          | ECU_A=1
+  [TX]  CRC_DELIM    | ECU_A=1
+  [TX]  ACK_SLOT     | ECU_A=1
+  [TX]  ACK_DELIM    | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  EOF          | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+  [TX]  INTERMISSION | ECU_A=1
+[MASTER] Frame OK: ID=0x050 data=0101010101010101
+[MASTER] ECU_A: TEC=0 (-1 per successo) State=ERROR_ACTIVE
+
+====================================================================================================
+STATUS BUS (IDLE)
+====================================================================================================
+  [ECU_A ] ID=0x050 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 3.48s
+  [ECU_B ] ID=0x100 | TEC=  0 REC=  1 | ERROR_ACTIVE  | PENDING
+  [ECU_C ] ID=0x200 | TEC=  0 REC=  1 | ERROR_ACTIVE  | Attende 7.17s
+  [ECU_D ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+  [ECU_E ] ID=0x300 | TEC=  8 REC=  0 | ERROR_ACTIVE  | PENDING
+====================================================================================================
+
+
+
+Simulazione interrotta manualmente
+
+====================================================================================================
+[FINAL STATUS]
+====================================================================================================
+  ECU_A: TEC=  0 REC=  1 State=ERROR_ACTIVE
+  ECU_B: TEC=  0 REC=  1 State=ERROR_ACTIVE
+  ECU_C: TEC=  0 REC=  1 State=ERROR_ACTIVE
+  ECU_D: TEC=  8 REC=  0 State=ERROR_ACTIVE
+  ECU_E: TEC=  8 REC=  0 State=ERROR_ACTIVE
+====================================================================================================
+
+[MASTER] STOP
