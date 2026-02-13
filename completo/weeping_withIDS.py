@@ -336,6 +336,8 @@ class CANBusMaster:
         return None, None, None, None
 
     def _handle_collision(self, bitstreams, active, start_bit_idx):
+        import sys, os
+        
         """Gestisce collisione tra ECU con stesso ID (bit monitoring -> error flag).
 
         Correzione scenari TEC / prosecuzione trasmissione:
@@ -394,6 +396,9 @@ class CANBusMaster:
                                     f"mode_bit={alert['mode_bit']} ({alert['mode_share']*100:.1f}%) | "
                                     f"H={alert['entropy']:.2f} | top_off={alert['top_offender']} ({alert['top_offender_share']*100:.1f}%)"
                                 )
+                                sys.stdout.flush()
+                                sys.stderr.flush()
+                                os._exit(0)
                         offered_at_error = offered[:]        # snapshot
                         bus_bit_at_error = bus_bit
                         break
@@ -672,9 +677,9 @@ class SimpleCANIDS:
 
     def __init__(
         self,
-        window_s: float = 2.0,          # finestra temporale
+        window_s: float = 30.0,          # finestra temporale
         min_collisions: int = 6,        # N collisioni in window per trigger rate
-        mode_share_th: float = 0.60,    # >=60% collisioni sullo stesso bit
+        mode_share_th: float = 0.75,    # >=60% collisioni sullo stesso bit
         entropy_th: float = 2.0,        # entropia bassa => concentrato (0..~6 per 64 bit)
         cooldown_s: float = 1.0         # evita spam alert
     ):
